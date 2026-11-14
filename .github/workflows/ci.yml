@@ -1,0 +1,131 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # 发布前校验：tag 必须与程序内声明的版本号一致，防止镜像版本与代码不符
+      - name: Check tag matches version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          V=$(grep -oP 'Version = "\K[^"]+' internal/config/version.go)
+          echo "tag=${GITHUB_REF_NAME} version.go=v${V}"
+          [ "v${V}" = "${GITHUB_REF_NAME}" ] || {
+            echo "::error::tag ${GITHUB_REF_NAME} 与 internal/config/version.go 的 v${V} 不一致"; exit 1; }
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Unit and integration tests
+        run: go test -count=1 ./...
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Frontend static check
+        run: node scripts/check-frontend.mjs
+
+      - name: Frontend render test
+        run: |
+          cd scripts
+          npm ci --no-audit --no-fund
+          cd ..
+          node scripts/frontend-render-test.mjs
+
+      - name: End-to-end smoke test
+        run: |
+          CGO_ENABLED=0 go build -trimpath -tags netgo,osusergo -ldflags "-s -w" -o bin/port-ledger .
+          bash scripts/e2e-smoke.sh bin/port-ledger
+
+  # 推送规则：
+  #   只有推送版本 tag(v*) 才构建并推送镜像，tag 为「vX.Y.Z + latest」两个。
+  #   不推无 v 前缀的重复 tag，也不推 main。
+  #   main 分支与 PR 只跑 test。
+  #   双推 GHCR 与 Docker Hub；未配置 Docker Hub 凭据时自动降级为只推 GHCR。
+  #   最终镜像为 scratch，只含二进制，不含源码与构建缓存。
+  docker:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+    env:
+      DH_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+      DH_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        if: ${{ env.DH_USER != '' && env.DH_TOKEN != '' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DH_USER }}
+          password: ${{ env.DH_TOKEN }}
+
+      # 一次构建、同时推两个仓库 —— 分开构建会产生不同的 layer 摘要
+      - name: Resolve image names
+        id: images
+        run: |
+          {
+            echo "list<<EOF"
+            echo "ghcr.io/${GITHUB_REPOSITORY}"
+            if [ -n "${DH_USER}" ]; then
+              echo "${DH_USER}/${GITHUB_REPOSITORY#*/}"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.images.outputs.list }}
+          # 顺序有讲究：版本号规则放最前，否则 image.version 标签会显示 latest
+          tags: |
+            type=raw,value=${{ github.ref_name }}
+            type=raw,value=latest
+
+      - name: Build and push (GHCR + Docker Hub)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            VERSION=${{ github.ref_name }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

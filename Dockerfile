@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1
 # 多阶段构建 → scratch 最终层，镜像体积 = 二进制本体（约 12–13 MB，amd64）
-FROM golang:1.27-alpine AS build
+#
+# 构建阶段固定运行在宿主架构（$BUILDPLATFORM），Go 原生交叉编译到 $TARGETARCH，
+# 避免在 QEMU 模拟下编译 ARM 版本导致的长时间等待。
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build
 WORKDIR /src
 
 # 依赖层缓存
@@ -13,7 +16,7 @@ ARG TARGETOS=linux
 ARG TARGETARCH=amd64
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath -tags netgo,osusergo \
-    -ldflags "-s -w -X main.buildArch=${TARGETARCH}" \
+    -ldflags "-s -w" \
     -o /out/port-ledger .
 
 FROM scratch

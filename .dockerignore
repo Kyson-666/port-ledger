@@ -6,6 +6,7 @@
 
 # 本地工具与依赖缓存
 .tools
+scripts
 node_modules
 **/node_modules
 
