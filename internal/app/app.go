@@ -22,6 +22,10 @@ type App struct {
 	Store *store.Store
 	Log   *logx.Logger
 
+	// envCfg 是启动时环境变量快照。设置持久化只改 Cfg；
+	// 「恢复默认」用它把 Cfg 拉回环境变量基准，避免内存值残留。
+	envCfg config.Config
+
 	mu         sync.RWMutex
 	dictCache  *dict.Dict
 	health     []scanner.Health
@@ -33,7 +37,7 @@ type App struct {
 
 // New 构造 App 并加载生效字典。
 func New(cfg *config.Config, st *store.Store, lg *logx.Logger) (*App, error) {
-	a := &App{Cfg: cfg, Store: st, Log: lg, startedAt: time.Now()}
+	a := &App{Cfg: cfg, Store: st, Log: lg, envCfg: *cfg, startedAt: time.Now()}
 	if err := a.ReloadDict(); err != nil {
 		return nil, err
 	}

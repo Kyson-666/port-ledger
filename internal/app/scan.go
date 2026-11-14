@@ -13,9 +13,9 @@ import (
 
 // ScanResult 是一次扫描的结果摘要。
 type ScanResult struct {
-	ScanID int64          `json:"scan_id"`
-	Status string         `json:"status"`
-	Counts map[string]int `json:"counts"`
+	ScanID int64            `json:"scan_id"`
+	Status string           `json:"status"`
+	Counts map[string]int   `json:"counts"`
 	Health []scanner.Health `json:"source_health"`
 }
 

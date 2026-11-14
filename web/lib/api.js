@@ -61,6 +61,7 @@ export const api = {
 
   settings: () => req('/api/settings'),
   putSettings: (body) => req('/api/settings', json('PUT', body)),
+  resetSettings: () => req('/api/settings', { method: 'DELETE' }),
 };
 
 export function downloadText(name, text, type = 'application/json') {

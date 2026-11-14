@@ -13,7 +13,7 @@ import (
 
 // Config 是进程的完整运行配置。
 type Config struct {
-	AdminPort int    // 容器内监听端口，默认 443
+	AdminPort     int // 容器内监听端口，默认 443
 	TLSSelfSigned bool
 	TLSCert       string
 	TLSKey        string

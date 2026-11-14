@@ -138,6 +138,19 @@ func (s *Store) AllSettings() (map[string]string, error) {
 	return m, rows.Err()
 }
 
+// ClearSettings 清空全部库内设置（回退环境变量默认值）。
+func (s *Store) ClearSettings() error {
+	_, err := s.db.Exec(`DELETE FROM settings`)
+	return err
+}
+
+// Checkpoint 把 WAL 日志合并回主数据库文件（PASSIVE，不阻塞读写）。
+// 由调度器每日调用一次，避免长期运行下 WAL 无限增长。
+func (s *Store) Checkpoint() error {
+	_, err := s.db.Exec(`PRAGMA wal_checkpoint(PASSIVE)`)
+	return err
+}
+
 // ---- audit ----
 
 // Audit 是一条审计记录。

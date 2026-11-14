@@ -624,7 +624,7 @@ func TestAPIBackup(t *testing.T) {
 
 	// 导入到同一实例（merge）
 	code, m, _ = do(t, ts, "POST", "/api/backup/import", map[string]any{
-		"mode": "merge",
+		"mode":  "merge",
 		"ports": []any{map[string]any{"port": 8080, "protocol": "tcp", "name": "额外"}},
 	})
 	if code != 200 {

@@ -176,7 +176,7 @@ func (l *Logger) Errorf(msg string, fields map[string]any) { l.log(Error, msg, f
 func (l *Logger) Tail(level Level, keyword string, limit int) []Entry {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	var out []Entry
+	out := make([]Entry, 0)
 	for i := 0; i < l.count; i++ {
 		e := l.ring[(l.start+i)%ringSize]
 		if ParseLevel(e.Level) < level {
@@ -220,9 +220,9 @@ func (l *Logger) ScanLogPath(date time.Time) string {
 func (l *Logger) ScanLogDates() []string {
 	ents, err := os.ReadDir(filepath.Join(l.dir, "scan"))
 	if err != nil {
-		return nil
+		return []string{}
 	}
-	var out []string
+	out := make([]string, 0)
 	for _, e := range ents {
 		if !e.IsDir() && strings.HasSuffix(e.Name(), ".log") {
 			out = append(out, strings.TrimSuffix(e.Name(), ".log"))

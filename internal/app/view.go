@@ -347,11 +347,13 @@ func (a *App) List(q ListQuery) (*ListResult, error) {
 	if end > total {
 		end = total
 	}
+	pageItems := make([]PortItem, 0, end-start)
+	pageItems = append(pageItems, filtered[start:end]...)
 	return &ListResult{
 		Total:    total,
 		Page:     q.Page,
 		PageSize: q.PageSize,
-		Items:    filtered[start:end],
+		Items:    pageItems,
 		Counts:   counts,
 		LastScan: last,
 	}, nil
@@ -437,14 +439,14 @@ func containsStr(list []string, s string) bool {
 
 // FreeQuery 结果：区间折叠 + 端口列表。
 type FreeQuery struct {
-	From     int      `json:"from"`
-	To       int      `json:"to"`
-	Count    int      `json:"count"`
-	Ports    []int    `json:"ports"`
-	Ranges   []FreeRange `json:"ranges"`
-	Protocol string   `json:"protocol"`
-	BasedOn  string   `json:"based_on"`
-	Truncated bool    `json:"truncated"`
+	From      int         `json:"from"`
+	To        int         `json:"to"`
+	Count     int         `json:"count"`
+	Ports     []int       `json:"ports"`
+	Ranges    []FreeRange `json:"ranges"`
+	Protocol  string      `json:"protocol"`
+	BasedOn   string      `json:"based_on"`
+	Truncated bool        `json:"truncated"`
 }
 
 // FreeRange 是一段连续空闲区间。
@@ -460,6 +462,9 @@ const maxFreePorts = 5000
 func (a *App) Free(from, to int, proto string, max int) (*FreeQuery, error) {
 	if proto == "" {
 		proto = "tcp"
+	}
+	if proto != "tcp" && proto != "udp" {
+		return nil, fmt.Errorf("protocol 仅支持 tcp/udp")
 	}
 	if from <= 0 {
 		from = 1024
@@ -528,18 +533,18 @@ func (a *App) Free(from, to int, proto string, max int) (*FreeQuery, error) {
 
 // Summary 是总览页所需的聚合数据。
 type Summary struct {
-	Version     string           `json:"version"`
-	Uptime      int64            `json:"uptime_seconds"`
-	LastScan    *store.ScanRun   `json:"last_scan"`
-	Counts      map[string]int   `json:"counts"`
-	FreeCount   int              `json:"free_count"`
-	FreeFrom    int              `json:"free_from"`
-	FreeTo      int              `json:"free_to"`
-	DictSize    int              `json:"dict_size"`
-	DictBuiltin int              `json:"dict_builtin"`
-	DictCustom  int              `json:"dict_custom"`
-	Health      any              `json:"source_health"`
-	Scanning    bool             `json:"scanning"`
+	Version     string         `json:"version"`
+	Uptime      int64          `json:"uptime_seconds"`
+	LastScan    *store.ScanRun `json:"last_scan"`
+	Counts      map[string]int `json:"counts"`
+	FreeCount   int            `json:"free_count"`
+	FreeFrom    int            `json:"free_from"`
+	FreeTo      int            `json:"free_to"`
+	DictSize    int            `json:"dict_size"`
+	DictBuiltin int            `json:"dict_builtin"`
+	DictCustom  int            `json:"dict_custom"`
+	Health      any            `json:"source_health"`
+	Scanning    bool           `json:"scanning"`
 }
 
 // Summary 构建总览聚合。

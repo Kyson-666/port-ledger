@@ -101,7 +101,7 @@ PortLedger 就是来解决这件事的——它自动扫出所有被占用的端
 ```yaml
 services:
   port-ledger:
-    image: ghcr.io/kyson-666/port-ledger:v1.0.0
+    image: ghcr.io/kyson-666/port-ledger:v1.0.1
     container_name: port-ledger
     restart: unless-stopped
     ports:
@@ -250,7 +250,7 @@ make e2e          # 端到端冒烟
 
 ## 版本
 
-当前版本 **v1.0.0**。每个版本的变更见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本 **v1.0.1**。每个版本的变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 其他文档
 

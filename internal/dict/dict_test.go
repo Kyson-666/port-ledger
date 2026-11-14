@@ -33,10 +33,10 @@ func TestLookupExactAndProtocol(t *testing.T) {
 	d := New(mustBuiltin(t))
 
 	cases := []struct {
-		port      int
-		proto     string
-		wantName  string
-		found     bool
+		port     int
+		proto    string
+		wantName string
+		found    bool
 	}{
 		{6690, "tcp", "Synology Drive 文件同步与备份", true},
 		{6690, "udp", "", false},
@@ -46,13 +46,13 @@ func TestLookupExactAndProtocol(t *testing.T) {
 		{6281, "tcp", "Hyper Backup Vault", true},
 		{22, "tcp", "SSH / SFTP", true},
 		{123, "udp", "NTP 时间同步", true},
-		{123, "tcp", "", false},                 // 仅 udp
-		{161, "tcp", "SNMP / 资源监控", true},    // both 覆盖 tcp
-		{161, "udp", "SNMP / 资源监控", true},    // both 覆盖 udp
-		{8505, "tcp", "MailPlus Server", true},  // 区间 8500-8520
-		{6969, "tcp", "BT（旧版本）", true},       // 区间 6890-6999
-		{7654, "tcp", "HA 数据同步", true},        // 区间 7400-7999
-		{21000, "tcp", "", false},               // 未命中
+		{123, "tcp", "", false},                // 仅 udp
+		{161, "tcp", "SNMP / 资源监控", true},      // both 覆盖 tcp
+		{161, "udp", "SNMP / 资源监控", true},      // both 覆盖 udp
+		{8505, "tcp", "MailPlus Server", true}, // 区间 8500-8520
+		{6969, "tcp", "BT（旧版本）", true},         // 区间 6890-6999
+		{7654, "tcp", "HA 数据同步", true},         // 区间 7400-7999
+		{21000, "tcp", "", false},              // 未命中
 	}
 	for _, c := range cases {
 		got, ok := d.Lookup(c.port, c.proto)

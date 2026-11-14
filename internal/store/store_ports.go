@@ -2,9 +2,16 @@ package store
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 )
+
+// ErrDuplicateReservation 表示同端口同协议已存在有效保留。
+var ErrDuplicateReservation = errors.New("该端口已存在有效保留")
+
+// ErrReservationNotFound 表示保留记录不存在。
+var ErrReservationNotFound = errors.New("保留记录不存在")
 
 // ---- ports 用户台账 ----
 
@@ -123,7 +130,17 @@ func (s *Store) ListReservations() ([]Reservation, error) {
 }
 
 // CreateReservation 新建保留，返回自增 ID。
+// 同一 port/protocol 只允许一条有效（未过期）保留，重复创建返回 ErrDuplicateReservation。
 func (s *Store) CreateReservation(r Reservation) (int64, error) {
+	list, err := s.ListReservations()
+	if err != nil {
+		return 0, err
+	}
+	for _, it := range list {
+		if it.Port == r.Port && it.Protocol == r.Protocol && !it.Expired {
+			return 0, ErrDuplicateReservation
+		}
+	}
 	res, err := s.db.Exec(`INSERT INTO reservations(port, protocol, owner, project, reason, expires_at, created_at)
 		VALUES(?,?,?,?,?,?,?)`, r.Port, r.Protocol, r.Owner, r.Project, r.Reason, r.ExpiresAt, now())
 	if err != nil {
@@ -132,17 +149,29 @@ func (s *Store) CreateReservation(r Reservation) (int64, error) {
 	return res.LastInsertId()
 }
 
-// UpdateReservation 续期 / 编辑保留。
+// UpdateReservation 续期 / 编辑保留。目标不存在时返回 ErrReservationNotFound。
 func (s *Store) UpdateReservation(id int64, owner, project, reason, expiresAt string) error {
-	_, err := s.db.Exec(`UPDATE reservations SET owner=?, project=?, reason=?, expires_at=? WHERE id=?`,
+	res, err := s.db.Exec(`UPDATE reservations SET owner=?, project=?, reason=?, expires_at=? WHERE id=?`,
 		owner, project, reason, expiresAt, id)
-	return err
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrReservationNotFound
+	}
+	return nil
 }
 
-// DeleteReservation 释放保留。
+// DeleteReservation 释放保留。目标不存在时返回 ErrReservationNotFound。
 func (s *Store) DeleteReservation(id int64) error {
-	_, err := s.db.Exec(`DELETE FROM reservations WHERE id=?`, id)
-	return err
+	res, err := s.db.Exec(`DELETE FROM reservations WHERE id=?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrReservationNotFound
+	}
+	return nil
 }
 
 // ActiveReservations 返回未过期的保留，键为 "port/protocol"。

@@ -2,7 +2,7 @@
 # 容器内固定监听 443，宿主端口 8899 仅为示例，可按需修改。
 services:
   port-ledger:
-    image: ghcr.io/kyson-666/port-ledger:v1.0.0
+    image: ghcr.io/kyson-666/port-ledger:v1.0.1
     container_name: port-ledger
     restart: unless-stopped
     ports:

@@ -40,7 +40,7 @@ done
 echo "== T1 健康检查 =="
 H=$(curl -s "$BASE/api/health")
 has "status=ok" "$H" '"status":"ok"'
-has "版本号呈现" "$H" '"version":"1.0.0"'
+has "版本号呈现" "$H" '"version":"1.0.1"'
 has "首启已自动扫描" "$H" '"scan_count":1'
 has "数据源健康非空" "$H" 'source_health'
 
@@ -134,10 +134,12 @@ BE=$(curl -s "$BASE/api/backup/export")
 has "导出台账含 ports" "$BE" '"ports"'
 has "导出内容含台账命名" "$BE" '保留台账项'
 has "导出落盘到 /data/backups" "$(ls "$DATA/backups" 2>/dev/null)" 'port-ledger-'
-BP=$(curl -s -X POST "$BASE/api/backup/import?preview=1" -H 'Content-Type: application/json' -d "$BE")
+BP=$(curl -s -X POST "$BASE/api/backup/import?preview=1" -H 'Content-Type: application/json' -d "$(printf '%s' "$BE" | sed 's/^{/{"mode":"merge",/')")
 has "导入预览返回 preview" "$BP" '"preview":true'
 has "导入预览统计命名条数" "$BP" '"ports":1'
-BI=$(curl -s -X POST "$BASE/api/backup/import" -H 'Content-Type: application/json' -d "$BE")
+BUX=$(curl -s -X POST "$BASE/api/backup/import" -H 'Content-Type: application/json' -d "$(printf '%s' "$BE" | sed 's/^{/{"mode":"upsert",/')")
+has "未知 mode 被拒" "$BUX" 'mode 仅支持'
+BI=$(curl -s -X POST "$BASE/api/backup/import" -H 'Content-Type: application/json' -d "$(printf '%s' "$BE" | sed 's/^{/{"mode":"merge",/')")
 has "按 merge 模式导入成功" "$BI" '"imported"'
 has "导入写入审计" "$(curl -s "$BASE/api/audit?action=backup_import")" 'backup_import'
 

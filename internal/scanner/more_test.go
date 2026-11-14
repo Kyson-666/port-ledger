@@ -100,7 +100,7 @@ func TestDockerIsSelf(t *testing.T) {
 		want     bool
 	}{
 		{"abcdef0123456789ffff", "port-ledger", true},
-		{"abcdef0123456789ffff", "other", true},   // ID 前缀命中
+		{"abcdef0123456789ffff", "other", true},       // ID 前缀命中
 		{"ffffffffffffffffffff", "port-ledger", true}, // 名称命中
 		{"ffffffffffffffffffff", "other", false},
 		{"", "", false},
@@ -124,10 +124,10 @@ func TestShortID(t *testing.T) {
 func TestIsHexID(t *testing.T) {
 	cases := map[string]bool{
 		"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef": true,
-		"abcdef012345":       true,
-		"ABCDEF012345":       false, // 大写不接受（Docker 用小写）
-		"abc":                false, // 过短
-		"zzz0123456789":      false,
+		"abcdef012345":        true,
+		"ABCDEF012345":        false, // 大写不接受（Docker 用小写）
+		"abc":                 false, // 过短
+		"zzz0123456789":       false,
 		"0123456789abcdef012": true,
 	}
 	for in, want := range cases {

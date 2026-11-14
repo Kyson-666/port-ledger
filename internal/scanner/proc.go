@@ -22,7 +22,7 @@ func (p *ProcScanner) Name() string { return "proc" }
 // Scan 返回宿主全部监听端口。单个文件缺失不视为失败（例如内核未启用 IPv6）。
 func (p *ProcScanner) Scan() ([]Listener, []Health, error) {
 	files := []struct {
-		file string
+		file  string
 		proto string
 	}{
 		{"net/tcp", "tcp"},

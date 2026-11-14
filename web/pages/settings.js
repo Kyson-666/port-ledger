@@ -36,11 +36,10 @@ export async function render(ctx) {
   const dockerSockS = Switch({ checked: !!v.scan_docker_socket });
   const composeDirI = Input({ value: v.scan_compose_dir ?? '', placeholder: '/compose' });
   const tlsS = Switch({ checked: !!v.tls_self_signed });
-  const webhookI = Input({ value: v.webhook ?? '', placeholder: 'https://…（可选）' });
 
   const changed = new Set();
   const track = (el, key) => el.addEventListener('change', () => changed.add(key));
-  [rangesI, intervalI, composeDirI, webhookI].forEach(el => el.addEventListener('input', () => changed.add(el === rangesI ? 'scan_ranges' : el === intervalI ? 'scan_interval' : el === composeDirI ? 'scan_compose_dir' : 'webhook')));
+  [rangesI, intervalI, composeDirI].forEach(el => el.addEventListener('input', () => changed.add(el === rangesI ? 'scan_ranges' : el === intervalI ? 'scan_interval' : 'scan_compose_dir')));
   track(onStartS.querySelector('input'), 'scan_on_start');
   track(hostProcS.querySelector('input'), 'scan_host_proc');
   track(dockerSockS.querySelector('input'), 'scan_docker_socket');
@@ -70,11 +69,8 @@ export async function render(ctx) {
     Field('容器内监听端口', Input({ value: env.admin_port ?? '', disabled: true }), { hint: '由环境变量 ADMIN_PORT 注入，修改请调整 compose' }),
     h('div.pl-field', null, tlsS,
       h('span', { style: { fontSize: 'var(--pl-font-sm)', color: 'var(--pl-n-600)' } }, ' 启用自签证书（HTTPS）'),
-      h('div.pl-field-hint', null, '该开关需重启容器后生效；默认明文 HTTP，建议由群晖反向代理终结 TLS。')),
+      h('div.pl-field-hint', null, '该开关由环境变量决定：此处保存的是期望值，需在 compose 中设置 TLS_SELF_SIGNED 并重启容器后生效。默认明文 HTTP，建议由群晖反向代理终结 TLS。')),
   ]));
-
-  // 通知
-  wrap.appendChild(Card([h('div.pl-card-title', null, '通知'), Field('Webhook（可选）', webhookI, { hint: '填写后扫描结果可推送到该地址' })]));
 
   // 保存
   const saveRow = h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '20px' } },
@@ -89,7 +85,6 @@ export async function render(ctx) {
       if (changed.has('scan_docker_socket')) payload.scan_docker_socket = dockerSockS.querySelector('input').checked;
       if (changed.has('scan_compose_dir')) payload.scan_compose_dir = composeDirI.value.trim();
       if (changed.has('tls_self_signed')) payload.tls_self_signed = tlsS.querySelector('input').checked;
-      if (changed.has('webhook')) payload.webhook = webhookI.value.trim();
       try {
         const res = await api.putSettings(payload);
         const needRestart = (res.restart_required || []).length > 0;
@@ -102,8 +97,8 @@ export async function render(ctx) {
       const ok = await confirmDialog({ title: '恢复默认设置', message: '将清除库内设置，回退到环境变量提供的默认值。是否继续？', confirmText: '恢复默认' });
       if (!ok) return;
       try {
-        await api.putSettings({ webhook: '' });
-        toast('已恢复默认（留空项回退环境变量）');
+        await api.resetSettings();
+        toast('已恢复默认（回退环境变量值）');
         await load(); ctx.rerender();
       } catch (e) { toast('恢复失败：' + e.message, 'danger'); }
     } }),
@@ -151,7 +146,7 @@ export async function render(ctx) {
       h('div', null, h('dt', null, '版本'), h('dd', null, hh.version || '—')),
       h('div', null, h('dt', null, '运行时长'), h('dd', null, fmtUptime(hh.uptime_seconds))),
       h('div', null, h('dt', null, '字典条目'), h('dd', null, String(hh.dict_size ?? '—'))),
-      h('div', null, h('dt', null, '上次扫描'), h('dd', null, hh.last_scan ? `${fmtTime(hh.last_scan.finished_at)} · ${hh.last_scan.status}` : '尚未扫描')),
+      h('div', null, h('dt', null, '上次扫描'), h('dd', null, hh.last_scan ? `${fmtTime(hh.last_scan.finished_at)} · ${scanStatusLabel(hh.last_scan.status)}` : '尚未扫描')),
       h('div', null, h('dt', null, '扫描次数'), h('dd', null, String(hh.scan_count ?? '—'))),
       h('div', null, h('dt', null, '运行模式'), h('dd', null, (env.tls_self_signed ? 'HTTPS（自签）' : 'HTTP（明文，建议反代终结 TLS）'))),
     ),
@@ -160,7 +155,9 @@ export async function render(ctx) {
   return wrap;
 }
 
-function changeDesc(set) { return [...set].map(k => ({ scan_ranges: '扫描范围', scan_interval: '扫描周期', scan_on_start: '首启扫描', scan_host_proc: '宿主监听表', scan_docker_socket: 'Docker API', scan_compose_dir: 'Compose 目录', tls_self_signed: 'TLS 自签', webhook: 'Webhook' }[k] || k)).join('、'); }
+function changeDesc(set) { return [...set].map(k => ({ scan_ranges: '扫描范围', scan_interval: '扫描周期', scan_on_start: '首启扫描', scan_host_proc: '宿主监听表', scan_docker_socket: 'Docker API', scan_compose_dir: 'Compose 目录', tls_self_signed: 'TLS 自签' }[k] || k)).join('、'); }
+
+function scanStatusLabel(s) { return { ok: '正常', partial: '部分完成', failed: '失败', running: '进行中' }[s] || s; }
 
 function fmtUptime(s) {
   if (!s) return '—';

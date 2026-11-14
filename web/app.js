@@ -38,7 +38,7 @@ function shell() {
     }
     navWrap.appendChild(box);
   }
-  navWrap.appendChild(h('div.pl-nav-foot', null, 'v1.0.0 · 无认证（内网）'));
+  navWrap.appendChild(h('div.pl-nav-foot', null, 'v1.0.1 · 无认证（内网）'));
 
   const search = Input({ placeholder: '搜索端口 / 名称 / 容器 / 项目', ariaLabel: '全局搜索' });
   search.className = 'pl-input pl-search';

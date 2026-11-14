@@ -74,17 +74,73 @@ func (s *Server) Routes() http.Handler {
 
 	mux.HandleFunc("GET /api/settings", s.handleSettingsGet)
 	mux.HandleFunc("PUT /api/settings", s.handleSettingsPut)
+	mux.HandleFunc("DELETE /api/settings", s.handleSettingsReset)
 
 	mux.HandleFunc("GET /", s.handleStatic)
 
-	return withCommonHeaders(mux)
+	// 标准库对「路径匹配但方法不符」输出纯文本 405；这里包装一层，
+	// 拦截 405 响应统一转成 JSON，保持错误格式一致。
+	return withCommonHeaders(jsonMethodNotAllowed(mux))
 }
 
-// 所有响应禁止缓存，避免升级后前端拿到旧 HTML / 旧数据（沿用既有工程约定）。
+// jsonMethodNotAllowed 在 mux 返回 405 纯文本时改写为 JSON 错误体。
+func jsonMethodNotAllowed(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/api/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		rec := &capStatusWriter{ResponseWriter: w, status: 200}
+		next.ServeHTTP(rec, r)
+		if rec.status == http.StatusMethodNotAllowed && !rec.wrote {
+			// 未写 body（标准库 405 在 handler 前生成），重写响应。
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"error": "该接口不支持 " + r.Method + " 方法"})
+			return
+		}
+	})
+}
+
+// capStatusWriter 捕获状态码；405 由标准库在路由层直接 WriteHeader，
+// 此时 handler 未写 body，可以安全重写。
+type capStatusWriter struct {
+	http.ResponseWriter
+	status int
+	wrote  bool
+}
+
+func (c *capStatusWriter) WriteHeader(code int) {
+	c.status = code
+	// 不落盘：405 时延迟到外层统一写；其它状态码透传。
+	if code != http.StatusMethodNotAllowed {
+		c.ResponseWriter.WriteHeader(code)
+		c.wrote = true
+	}
+}
+
+func (c *capStatusWriter) Write(b []byte) (int, error) {
+	if c.status == http.StatusMethodNotAllowed {
+		// 吞掉纯文本 body
+		return len(b), nil
+	}
+	return c.ResponseWriter.Write(b)
+}
+
+// 所有响应禁止缓存（API），并补充基础安全响应头。
 func withCommonHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			w.Header().Set("Cache-Control", "no-store")
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+		} else {
+			// 前端由本进程自身提供、无第三方资源，锁定资源来源并禁止被嵌入。
+			h := w.Header()
+			h.Set("X-Content-Type-Options", "nosniff")
+			h.Set("X-Frame-Options", "DENY")
+			h.Set("Referrer-Policy", "no-referrer")
+			h.Set("Content-Security-Policy",
+				"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'")
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -125,14 +181,14 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"source_health":  s.App.SourceHealth(),
 		"dict_size":      s.App.Dict().Size(),
 		"config": map[string]any{
-			"admin_port":          s.App.Cfg.AdminPort,
-			"scan_interval":       int(s.App.Cfg.ScanInterval.Seconds()),
-			"scan_ranges":         s.App.Cfg.ScanRanges,
-			"scan_host_proc":      s.App.Cfg.ScanHostProc,
-			"scan_docker_socket":  s.App.Cfg.ScanDockerSocket,
-			"scan_compose_dir":    s.App.Cfg.ScanComposeDir,
-			"tls_self_signed":     s.App.Cfg.TLSSelfSigned,
-			"active_scan_target":  s.App.Cfg.ScanTargetHost,
+			"admin_port":         s.App.Cfg.AdminPort,
+			"scan_interval":      int(s.App.Cfg.ScanInterval.Seconds()),
+			"scan_ranges":        s.App.Cfg.ScanRanges,
+			"scan_host_proc":     s.App.Cfg.ScanHostProc,
+			"scan_docker_socket": s.App.Cfg.ScanDockerSocket,
+			"scan_compose_dir":   s.App.Cfg.ScanComposeDir,
+			"tls_self_signed":    s.App.Cfg.TLSSelfSigned,
+			"active_scan_target": s.App.Cfg.ScanTargetHost,
 		},
 	})
 }
@@ -173,15 +229,28 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res)
 }
 
+// validStates 是端口列表 state 过滤的合法值（与 reconcile 七态一致）。
+var validStates = map[string]bool{
+	"self": true, "system": true, "in-use(docker)": true, "in-use(host)": true,
+	"configured": true, "reserved": true, "free": true,
+}
+
 func (s *Server) handlePortsList(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	page, _ := strconv.Atoi(q.Get("page"))
 	pageSize, _ := strconv.Atoi(q.Get("page_size"))
 	from, _ := strconv.Atoi(q.Get("from"))
 	to, _ := strconv.Atoi(q.Get("to"))
+	states := splitCSV(q.Get("state"))
+	for _, st := range states {
+		if !validStates[st] {
+			writeErr(w, http.StatusBadRequest, fmt.Sprintf("未知状态 %q；可选：self/system/in-use(docker)/in-use(host)/configured/reserved/free", st))
+			return
+		}
+	}
 	res, err := s.App.List(app.ListQuery{
 		Q:          q.Get("q"),
-		States:     splitCSV(q.Get("state")),
+		States:     states,
 		Protocol:   q.Get("protocol"),
 		SourceKind: q.Get("source"),
 		Project:    q.Get("project"),
@@ -305,10 +374,34 @@ func (s *Server) handlePortPut(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleFree(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	from, _ := strconv.Atoi(q.Get("from"))
-	to, _ := strconv.Atoi(q.Get("to"))
-	max, _ := strconv.Atoi(q.Get("count"))
-	res, err := s.App.Free(from, to, q.Get("protocol"), max)
+	from, err := strconv.Atoi(q.Get("from"))
+	if err != nil && q.Get("from") != "" {
+		writeErr(w, http.StatusBadRequest, "from 需为数字")
+		return
+	}
+	to, err := strconv.Atoi(q.Get("to"))
+	if err != nil && q.Get("to") != "" {
+		writeErr(w, http.StatusBadRequest, "to 需为数字")
+		return
+	}
+	if from < 0 || to < 0 {
+		writeErr(w, http.StatusBadRequest, "from/to 不能为负数")
+		return
+	}
+	max := 0
+	if v := q.Get("count"); v != "" {
+		max, err = strconv.Atoi(v)
+		if err != nil || max < 1 {
+			writeErr(w, http.StatusBadRequest, "count 需为 1-5000 之间的数字")
+			return
+		}
+	}
+	proto := strings.ToLower(q.Get("protocol"))
+	if proto != "" && proto != "tcp" && proto != "udp" {
+		writeErr(w, http.StatusBadRequest, "protocol 仅支持 tcp/udp")
+		return
+	}
+	res, err := s.App.Free(from, to, proto, max)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return

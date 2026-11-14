@@ -51,7 +51,7 @@ func TestRunPriority(t *testing.T) {
 		source string
 	}{
 		{8899, "tcp", StateSelf, SrcSelf},
-		{5000, "tcp", StateSystem, SrcDict},      // system 优先于 docker
+		{5000, "tcp", StateSystem, SrcDict}, // system 优先于 docker
 		{6690, "tcp", StateSystem, SrcDict},
 		{123, "udp", StateSystem, SrcDict},
 		{8081, "tcp", StateInUseDock, SrcDocker}, // docker 优先于 host

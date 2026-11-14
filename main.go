@@ -67,6 +67,13 @@ func runHealthCheck() error {
 		scheme = "https"
 	}
 	client := &http.Client{Timeout: 3 * time.Second}
+	if scheme == "https" {
+		// 自签证书不在任何信任链里，探针对本机回环地址跳过证书校验；
+		// 只用于确认「服务在监听且能应答」，不承载敏感信息。
+		client.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12},
+		}
+	}
 	resp, err := client.Get(scheme + "://127.0.0.1:" + port + "/api/health")
 	if err != nil {
 		return err
@@ -209,7 +216,7 @@ func run() error {
 	return nil
 }
 
-// scheduler 按 SCAN_INTERVAL 周期扫描，并每日清理过期扫描日志。
+// scheduler 按 SCAN_INTERVAL 周期扫描，并每日清理过期扫描日志、合并 WAL。
 func scheduler(ctx context.Context, a *app.App, lg *logx.Logger) {
 	lastCleanup := time.Now()
 	ticker := time.NewTicker(30 * time.Second)
@@ -234,6 +241,9 @@ func scheduler(ctx context.Context, a *app.App, lg *logx.Logger) {
 				lastCleanup = now
 				if n := lg.CleanupScanLogs(30); n > 0 {
 					lg.Infof("清理过期扫描日志", map[string]any{"removed": n})
+				}
+				if err := a.Store.Checkpoint(); err != nil {
+					lg.Warnf("数据库 WAL 合并失败", map[string]any{"error": err.Error()})
 				}
 			}
 		}

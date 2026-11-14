@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -127,6 +128,10 @@ func (s *Server) handleReservationsCreate(w http.ResponseWriter, r *http.Request
 		Reason: req.Reason, ExpiresAt: req.ExpiresAt,
 	})
 	if err != nil {
+		if errors.Is(err, store.ErrDuplicateReservation) {
+			writeErr(w, http.StatusConflict, fmt.Sprintf("端口 %d/%s 已有一条有效保留，请先释放后再重新保留，或直接编辑该保留", req.Port, strings.ToUpper(proto)))
+			return
+		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -154,6 +159,10 @@ func (s *Server) handleReservationsUpdate(w http.ResponseWriter, r *http.Request
 		}
 	}
 	if err := s.App.Store.UpdateReservation(req.ID, req.Owner, req.Project, req.Reason, req.ExpiresAt); err != nil {
+		if errors.Is(err, store.ErrReservationNotFound) {
+			writeErr(w, http.StatusNotFound, fmt.Sprintf("保留 #%d 不存在（可能已被释放）", req.ID))
+			return
+		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -180,6 +189,10 @@ func (s *Server) handleReservationsDelete(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err := s.App.Store.DeleteReservation(id); err != nil {
+		if errors.Is(err, store.ErrReservationNotFound) {
+			writeErr(w, http.StatusNotFound, fmt.Sprintf("保留 #%d 不存在（可能已被释放）", id))
+			return
+		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -493,13 +506,19 @@ func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"total": len(list), "items": list})
+	items := make([]store.Audit, 0, len(list))
+	items = append(items, list...)
+	writeJSON(w, http.StatusOK, map[string]any{"total": len(items), "items": items})
 }
 
 func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	date := q.Get("date")
 	if date != "" {
+		if _, err := time.ParseInLocation("2006-01-02", date, time.Local); err != nil {
+			writeErr(w, http.StatusBadRequest, "date 需为 YYYY-MM-DD 格式: "+date)
+			return
+		}
 		content, err := s.App.Log.ReadScanLog(date, 2000)
 		if err != nil {
 			writeErr(w, http.StatusNotFound, "该日期没有扫描日志: "+date)
@@ -564,11 +583,23 @@ func (s *Server) handleBackupImport(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "JSON 格式不正确: "+err.Error())
 		return
 	}
-	mode := req.Mode
-	if mode != "replace" {
-		mode = "merge"
+	// mode 只认 body 里的 merge/replace；未知值直接拒绝，避免「想 replace 却被静默降级为 merge」。
+	if req.Mode != "merge" && req.Mode != "replace" {
+		writeErr(w, http.StatusBadRequest, "mode 仅支持 merge 或 replace")
+		return
 	}
-	if len(req.Ports) == 0 && len(req.Reservations) == 0 && len(req.DictUser) == 0 && len(req.DictOverrides) == 0 {
+	// settings 键同样过白名单，防止备份文件把任意键注入 settings 表。
+	for k := range req.Settings {
+		if !app.SettingKeys[k] {
+			writeErr(w, http.StatusBadRequest, fmt.Sprintf("备份文件包含未知设置项 %q，已拒绝导入", k))
+			return
+		}
+	}
+	if err := app.ValidateLedgerSettingsValues(req.Settings); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if len(req.Ports) == 0 && len(req.Reservations) == 0 && len(req.DictUser) == 0 && len(req.DictOverrides) == 0 && len(req.Settings) == 0 {
 		writeErr(w, http.StatusBadRequest, "文件中没有可导入的台账数据")
 		return
 	}
@@ -576,17 +607,17 @@ func (s *Server) handleBackupImport(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"preview": true, "ports": len(req.Ports), "reservations": len(req.Reservations),
 			"dict_user": len(req.DictUser), "dict_overrides": len(req.DictOverrides),
-			"settings": len(req.Settings), "mode": mode,
+			"settings": len(req.Settings), "mode": req.Mode,
 		})
 		return
 	}
-	counts, err := s.App.Store.ImportLedger(&req.Ledger, mode)
+	counts, err := s.App.Store.ImportLedger(&req.Ledger, req.Mode)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	_ = s.App.Store.AddAudit(store.Audit{Action: "backup_import", Target: "台账",
-		Detail: fmt.Sprintf("导入 %d 命名、%d 保留（%s）", counts["ports"], counts["reservations"], mode)})
+		Detail: fmt.Sprintf("导入 %d 命名、%d 保留、%d 设置（%s）", counts["ports"], counts["reservations"], counts["settings"], req.Mode)})
 	if err := s.App.ApplySettings(); err != nil {
 		s.App.Log.Warnf("导入后应用设置失败", map[string]any{"error": err.Error()})
 	}
@@ -606,9 +637,9 @@ func (s *Server) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"values":            eff,
-		"env_defaults":      s.App.SettingDefaults(),
-		"restart_required":  app.RestartRequiredKeys,
+		"values":           eff,
+		"env_defaults":     s.App.SettingDefaults(),
+		"restart_required": app.RestartRequiredKeys,
 	})
 }
 
@@ -655,6 +686,18 @@ func (s *Server) handleSettingsPut(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleSettingsReset 清空库内设置，回退到环境变量提供的默认值。
+func (s *Server) handleSettingsReset(w http.ResponseWriter, r *http.Request) {
+	if err := s.App.Store.ClearSettings(); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.App.ResetSettingsToEnv() // 清 DB 之外，还要还原 Cfg 里残留的内存覆盖值
+	_ = s.App.Store.AddAudit(store.Audit{Action: "setting_reset", Target: "设置", Detail: "恢复默认（清除库内设置并还原运行配置）"})
+	eff, _ := s.App.EffectiveSettings()
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "values": eff})
+}
+
 // ---------- 静态资源 ----------
 
 func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
@@ -665,6 +708,35 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 	p := strings.TrimPrefix(r.URL.Path, "/")
 	if p == "" {
 		p = "index.html"
+	}
+	// SPA 回退只服务于「无扩展名的页面路径」；带扩展名的资源缺失时如实 404，
+	// 避免脚本/样式加载失败被 200 的 HTML 掩盖。
+	ext := filepath.Ext(p)
+	isPage := ext == "" || strings.HasSuffix(p, ".html")
+	if !isPage {
+		f, err := s.Assets.Open(p)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer f.Close()
+		st, err := f.Stat()
+		if err != nil || st.IsDir() {
+			http.NotFound(w, r)
+			return
+		}
+		ct := mime.TypeByExtension(ext)
+		if ct == "" {
+			ct = "application/octet-stream"
+		}
+		w.Header().Set("Content-Type", ct)
+		w.Header().Set("Cache-Control", "no-cache")
+		if rs, ok := f.(io.ReadSeeker); ok {
+			http.ServeContent(w, r, p, st.ModTime(), rs)
+			return
+		}
+		_, _ = io.Copy(w, f)
+		return
 	}
 	f, err := s.Assets.Open(p)
 	if err != nil {
@@ -677,16 +749,8 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 		s.serveIndex(w, r)
 		return
 	}
-	ct := mime.TypeByExtension(filepath.Ext(p))
-	if ct == "" {
-		ct = "application/octet-stream"
-	}
-	w.Header().Set("Content-Type", ct)
-	if strings.HasSuffix(p, ".html") {
-		w.Header().Set("Cache-Control", "no-store")
-	} else {
-		w.Header().Set("Cache-Control", "no-cache")
-	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
 	if rs, ok := f.(io.ReadSeeker); ok {
 		http.ServeContent(w, r, p, st.ModTime(), rs)
 		return

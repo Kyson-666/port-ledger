@@ -30,7 +30,7 @@ window.isSecureContext = false;
 /* ---------- 接口桩 ---------- */
 const fixtures = {
   '/api/health': {
-    status: 'ok', version: '1.0.0', uptime_seconds: 3725, scanning: false, scan_count: 3,
+    status: 'ok', version: '1.0.1', uptime_seconds: 3725, scanning: false, scan_count: 3,
     dict_size: 1843, last_scan: { id: 3, status: 'ok', finished_at: '2026-11-14T21:58:00+08:00', started_at: '2026-11-14T21:57:58+08:00' },
     source_health: [
       { name: 'proc', enabled: true, ok: true, count: 38 },
@@ -159,11 +159,12 @@ console.log('前端渲染冒烟测试（jsdom）');
   console.log('P8 设置');
   const { render } = await load('pages/settings.js');
   const text = (await render(ctx)).textContent;
-  check('四个分组齐全', ['扫描设置', '数据源', '服务', '通知'].every(k => text.includes(k)));
+  check('三个分组齐全', ['扫描设置', '数据源', '服务'].every(k => text.includes(k)));
+  check('无 webhook 残留', !text.includes('Webhook') && !text.includes('webhook'));
   check('只读项标注环境变量注入', text.includes('ADMIN_PORT'));
   check('TLS 提示需重启', text.includes('重启容器后生效'));
   check('备份与恢复入口', text.includes('备份与恢复') && text.includes('导出台账 JSON'));
-  check('系统信息含版本', text.includes('系统信息') && text.includes('1.0.0'));
+  check('系统信息含版本', text.includes('系统信息') && text.includes('1.0.1'));
 }
 
 console.log(`\n结果：通过 ${pass} 项，失败 ${fail} 项。`);

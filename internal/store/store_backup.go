@@ -35,13 +35,29 @@ func (s *Store) ExportLedger(version string) (*Ledger, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 空集合统一输出 [] 而非 null，便于消费方（脚本/导入）无需判空。
+	if ports == nil {
+		ports = []PortMeta{}
+	}
+	if res == nil {
+		res = []Reservation{}
+	}
+	if du == nil {
+		du = []DictUserEntry{}
+	}
+	if dov == nil {
+		dov = []DictOverride{}
+	}
+	if st == nil {
+		st = map[string]string{}
+	}
 	return &Ledger{
 		Version: version, ExportedAt: now(),
 		Ports: ports, Reservations: res, DictUser: du, DictOverrides: dov, Settings: st,
 	}, nil
 }
 
-// ImportLedger 导入台账。mode = replace 时先清空既有台账类数据。
+// ImportLedger 导入台账。mode = replace 时先清空既有台账类数据与设置。
 func (s *Store) ImportLedger(l *Ledger, mode string) (map[string]int, error) {
 	counts := map[string]int{}
 	tx, err := s.db.Begin()
@@ -51,7 +67,7 @@ func (s *Store) ImportLedger(l *Ledger, mode string) (map[string]int, error) {
 	defer tx.Rollback()
 
 	if mode == "replace" {
-		for _, q := range []string{`DELETE FROM ports`, `DELETE FROM reservations`, `DELETE FROM dict_user`, `DELETE FROM dict_override`} {
+		for _, q := range []string{`DELETE FROM ports`, `DELETE FROM reservations`, `DELETE FROM dict_user`, `DELETE FROM dict_override`, `DELETE FROM settings`} {
 			if _, err := tx.Exec(q); err != nil {
 				return nil, err
 			}
