@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # PortLedger 端到端冒烟：以真实扫描器（proc / compose 夹具）驱动完整业务流。
+#
 # 用法：bash scripts/e2e-smoke.sh [二进制路径]
+# 默认读取 ./bin/port-ledger，临时目录自动创建并在结束时清理。
 set -u
 
-BIN="${1:-/tmp/port-ledger.exe}"
+BIN="${1:-./bin/port-ledger}"
 PORT="${ADMIN_PORT_E2E:-18081}"
 BASE="http://127.0.0.1:${PORT}"
-WORK="/d/tmp/pl-e2e"
+WORK="$(mktemp -d)"
 DATA="$WORK/data"
 PASS=0; FAIL=0
 
@@ -16,7 +18,7 @@ has()  { if echo "$2" | grep -q -- "$3"; then ok "$1"; else bad "$1（未匹配:
 lacks(){ if echo "$2" | grep -q -- "$3"; then bad "$1（不应包含: $3）"; else ok "$1"; fi; }
 
 echo "== 准备夹具与数据目录 =="
-rm -rf "$WORK"; mkdir -p "$DATA" "$WORK"
+mkdir -p "$DATA"
 cp -r "$(dirname "$0")/../internal/scanner/testdata/proc" "$WORK/proc"
 cp -r "$(dirname "$0")/../internal/scanner/testdata/compose" "$WORK/compose"
 
@@ -28,7 +30,7 @@ SCAN_HOST_PROC=true SCAN_DOCKER_SOCKET=false \
 SCAN_ON_START=true SCAN_INTERVAL=0 LOG_LEVEL=info \
 "$BIN" > "$WORK/server.log" 2>&1 &
 SRV=$!
-trap 'kill $SRV 2>/dev/null' EXIT
+trap 'kill $SRV 2>/dev/null; rm -rf "$WORK"' EXIT
 
 for i in $(seq 1 40); do
   if curl -s -o /dev/null --max-time 2 "$BASE/api/health"; then break; fi

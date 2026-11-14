@@ -1,117 +1,259 @@
 # PortLedger（端口台账）
 
-群晖 Docker 端口盘点与用途管理工具。扫描已被占用与空闲的端口，为端口登记用途，并自动标注群晖系统保留端口。
+给群晖 NAS 上用 Docker 的人准备的小工具：**一眼看清哪些端口被占了、哪些还空着**，还能给每个端口记下用途。
 
-- 单二进制 + 内嵌前端 + 纯 Go SQLite，**零外部依赖**
-- 多阶段构建 → **scratch**，镜像 ≈ 12 MB，支持 `linux/amd64` 与 `linux/arm64`
-- 全部数据源**只读**：不 kill 进程、不改宿主配置、不写宿主文件系统
+装的应用一多，端口就会乱：想新装个容器，不知道该挑哪个端口号，随手填一个结果跟旧服务撞了；过几个月回头看，一堆端口想不起来是谁在用；群晖自己的服务（文件同步、备份、管理后台）占的端口，还常常被误当成"空闲"。
 
-> 设计依据：`deliverables/port-ledger-design-2026-11-14.md`（技术定稿）、
-> `deliverables/port-ledger-ui-interaction-design-2026-11-14.md`（页面与交互）、
-> `deliverables/port-ledger-design-system-2026-11-14.md`（配色与组件唯一来源）。
+PortLedger 就是来解决这件事的——它自动扫出所有被占用的端口，自动把群晖系统端口认出来并写上中文名字，剩下的空闲端口你随便挑。
+
+- 一个容器跑起来就行，不需要额外的数据库或别的组件
+- 镜像很小（约 12 MB），x86 和 ARM 群晖都能跑
+- **只读**：它只看不改，不会停你的容器，也不会动群晖的任何设置
 
 ---
 
-## 快速开始（群晖 DSM 7.x / Container Manager）
+## 它能做什么
+
+### 自动盘点端口
+
+从四个地方汇总信息，尽量不漏：
+
+1. **群晖系统正在监听的端口**——谁在用什么端口，一目了然
+2. **Docker 容器的端口映射**——哪条映射对应哪个容器
+3. **compose 文件里声明的端口**——已经写好但还没启动的也算，提前避开
+4. **主动探测（可选，默认关闭）**——补充手段，说明见下方「常见问题」
+
+### 群晖系统端口自动认名
+
+内置群晖官方公布的端口清单（**109 条规则，覆盖 14 类服务**），命中就自动写上中文名字，不用自己查：
+
+| 端口 | 自动显示为 |
+|---|---|
+| 5000 / 5001 | DSM 网页 HTTP / HTTPS |
+| 6690 | Synology Drive 文件同步与备份 |
+| 6281 | Hyper Backup Vault |
+| 873 | rsync / 共享文件夹同步 |
+| 445 | SMB / CIFS（Windows 共享） |
+| 2049 | NFS |
+| 3260 | iSCSI / LUN 备份 |
+| 22 | SSH / SFTP |
+
+名字不合你习惯可以自己改，改完仍然标着"系统"。
+
+### 给端口起名字，记用途
+
+任意端口都能写**名称、备注、标签、归属项目**。例如把 8899 记成「Home Assistant · 智能家居」，半年后再看也知道是谁在用。
+
+### 冲突会提醒你
+
+如果某个**群晖系统端口被你的容器占用了**，列表里会直接打上红色的「冲突」标记——这类占用往往会在群晖升级或重启后出问题，早点发现比事后排查省事。
+
+### 空闲端口随手挑
+
+输入端口范围，直接列出可用端口和连续的可用区间，还能一键复制成配置片段：
+
+```
+-p 21000:21000
+-p 21001:21001
+```
+
+### 端口预留
+
+给还没部署的项目先把端口占住，写清负责人、项目、原因和到期时间。到期会自动失效，避免"僵尸预留"。
+
+### 备份与恢复
+
+所有记录可以导出成一个 JSON 文件，换机器或重装后导入即可，不用重新一条条输。
+
+### 操作留痕
+
+谁在什么时候改了哪个端口的名字、谁保留了哪个端口，都记在「审计与日志」里，可查可导出。
+
+---
+
+## 界面
+
+一共 8 个页面，中文界面：
+
+| 页面 | 用途 |
+|---|---|
+| **总览** | 端口总数、系统端口、已保留、空闲数量的汇总，一眼看全局 |
+| **端口列表** | 核心页。按端口号、协议、状态、名称、来源筛选，点任意一行即可改名 |
+| **空闲端口** | 按范围查可用端口，支持"要连续 N 个" |
+| **保留管理** | 管理端口预留，支持续期和释放 |
+| **系统字典** | 查看群晖端口清单，可改名、可补充自己的条目、可导入导出 |
+| **审计与日志** | 操作记录 + 运行日志 |
+| **设置** | 扫描范围、扫描周期、数据源开关等 |
+| **命名侧栏** | 从端口列表点开，改名称/备注/标签/项目 |
+
+---
+
+## 快速开始（群晖 DSM 7.x）
+
+### 1. 建好目录
+
+在 File Station 里创建 `/volume1/docker/port-ledger`，并在里面建三个子文件夹：`data`、`logs`、`backups`。
+
+### 2. 准备 docker-compose.yml
+
+把下面内容保存为 `/volume1/docker/port-ledger/docker-compose.yml`：
+
+```yaml
+services:
+  port-ledger:
+    image: ghcr.io/kyson-666/port-ledger:v1.0.0
+    container_name: port-ledger
+    restart: unless-stopped
+    ports:
+      - "8899:443"            # 左边 8899 是宿主机端口，可以改成你喜欢的
+    environment:
+      TZ: Asia/Shanghai
+      SCAN_INTERVAL: "300"
+    volumes:
+      - /volume1/docker/port-ledger/data:/data
+      - /volume1/docker/port-ledger/logs:/data/logs
+      - /volume1/docker/port-ledger/backups:/data/backups
+      - /proc:/host/proc:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /volume1/docker:/compose:ro
+      - /etc/localtime:/etc/localtime:ro
+```
+
+完整的可调项见仓库根目录的 `docker-compose.yml`。
+
+### 3. 启动
+
+Container Manager → 项目 → 新增 → 选择上一步的目录。或者 SSH 上去执行：
 
 ```bash
-mkdir -p /volume1/docker/port-ledger/{data,logs,backups}
-# 将 docker-compose.yml 放到 /volume1/docker/port-ledger/ 后：
 sudo docker compose up -d
 ```
 
-访问 `http://<群晖IP>:8899/`（宿主端口按 compose 中的映射）。
+### 4. 打开
 
-若启用了 DSM 防火墙，请在「控制面板 → 安全 → 防火墙」放行所映射的宿主端口。
-容器内固定监听 **443**，与宿主 443 不冲突（bridged 网络）。
+浏览器访问 `http://群晖IP:8899`。
+
+> 如果开了群晖防火墙，记得在「控制面板 → 安全 → 防火墙」放行 8899。
+> 第一次打开会自动扫一遍，稍等几秒就有数据了。
 
 ---
 
-## 环境变量
+## 配置项
 
-| 变量 | 默认 | 说明 |
+全部通过环境变量设置。带「需重启」的项在网页里改完要重启容器才生效。
+
+| 变量 | 默认值 | 说明 |
 |---|---|---|
-| `ADMIN_PORT` | `443` | 容器内监听端口 |
-| `TLS_SELF_SIGNED` | `false` | `true` 时自签证书并以 HTTPS 提供服务（需重启） |
-| `TLS_CERT` / `TLS_KEY` | — | 指定自定义证书（优先于自签） |
-| `DATA_DIR` | `/data` | 数据根目录（库、日志、备份均在其下） |
-| `SCAN_HOST_PROC` | `true` | 解析宿主监听表（需只读挂载 `/proc`） |
-| `SCAN_DOCKER_SOCKET` | `true` | 读取容器端口映射（需只读挂载 `docker.sock`） |
-| `SCAN_COMPOSE_DIR` | `/compose` | compose 声明目录（只读挂载） |
-| `SCAN_RANGES` | `1-65535` | 扫描范围，支持 `1-1024,8000-8100` |
-| `SCAN_ON_START` | `true` | 空库首启自动全量扫描 |
-| `SCAN_INTERVAL` | `300` | 周期扫描秒数，`0` = 仅手动 |
-| `PROC_ROOT` | `/host/proc` | 宿主 `/proc` 的容器内挂载点 |
-| `DOCKER_HOST` | `unix:///var/run/docker.sock` | Docker 套接字 |
-| `SELF_CONTAINER_NAME` | `port-ledger` | 用于识别"本工具"端口 |
-| `SCAN_TARGET_HOST` | 空（禁用） | 主动扫描目标，见下方限制说明 |
-| `LOG_LEVEL` | `info` | `debug`/`info`/`warn`/`error` |
-
-可在管理台「设置」页修改部分项（写入库内并立即生效，除需重启项）。
+| `ADMIN_PORT` | `443` | 容器内部监听的端口。**一般不用改**，改宿主机端口就行 |
+| `TZ` | `Asia/Shanghai` | 时区 |
+| `DATA_DIR` | `/data` | 数据根目录，数据库、日志、备份都在里面 |
+| `SCAN_HOST_PROC` | `true` | 是否读取群晖系统正在监听的端口 |
+| `SCAN_DOCKER_SOCKET` | `true` | 是否读取容器的端口映射 |
+| `SCAN_COMPOSE_DIR` | `/compose` | compose 文件所在目录 |
+| `SCAN_RANGES` | `1-65535` | 扫描范围，可写 `1-1024,8000-8100` |
+| `SCAN_ON_START` | `true` | 首次启动自动扫一遍 |
+| `SCAN_INTERVAL` | `300` | 每隔多少秒自动扫一次，`0` 表示只在需要时手动扫 |
+| `LOG_LEVEL` | `info` | 日志详细程度：`debug` / `info` / `warn` / `error` |
+| `TLS_SELF_SIGNED` | `false` | 是否启用自签证书（HTTPS）。需重启 |
+| `TLS_CERT` / `TLS_KEY` | 空 | 用你自己的证书，优先于自签 |
+| `PROC_ROOT` | `/host/proc` | 群晖进程信息在容器里的位置，一般不用改 |
+| `DOCKER_HOST` | `unix:///var/run/docker.sock` | Docker 的通信地址，一般不用改 |
 
 ---
 
-## 持久化路径
+## 数据存在哪
+
+全部落在你映射的 `data`、`logs`、`backups` 三个文件夹里：
 
 ```
 /volume1/docker/port-ledger/
-├── data/port-ledger.db            # SQLite：命名 / 保留 / 观测 / 审计 / 字典 / 设置
-├── logs/app.log                   # 应用日志（JSON 行，10MB × 5 轮转）
-├── logs/scan/YYYY-MM-DD.log       # 扫描明细（保留 30 天）
-└── backups/port-ledger-*.json     # 台账导出
+├── data/port-ledger.db            # 所有记录：命名、预留、系统端口名字、操作记录
+├── logs/app.log                   # 运行日志，写满 10MB 自动轮换，保留 5 份
+├── logs/scan/2026-11-14.log       # 每天的扫描明细，保留 30 天
+└── backups/port-ledger-*.json     # 点「导出台账」时生成
 ```
 
-容器内挂载点：`/data`、`/data/logs`、`/data/backups`（读写）；`/proc`、`/var/run/docker.sock`、`/volume1/docker`（只读）。
+这几个文件夹都在群晖的存储卷上，**Hyper Backup 和快照会照常把它们备份走**，不需要额外配置。
+
+想备份或换机器：在「设置 → 备份与恢复」里点导出，拿到 JSON 文件；新环境导入即可。
 
 ---
 
-## 端口状态
+## 端口状态说明
 
-| 状态 | 徽标 | 含义 |
+列表里每个端口都有状态标签，一共 7 种：
+
+| 标签 | 含义 | 该不该用 |
 |---|---|---|
-| `self` | 本工具 | PortLedger 自身所占端口 |
-| `system` | 系统 | 命中群晖系统端口字典 |
-| `in-use(docker)` | 容器 | 被容器发布映射占用 |
-| `in-use(host)` | 进程 | 被宿主进程监听占用 |
-| `configured` | 已声明 | compose 已声明但尚未启动 |
-| `reserved` | 已保留 | 用户为待部署项目预留 |
-| `free` | 空闲 | 可分配 |
-
-判定优先级（高→低）：`self > system > in-use(docker) > in-use(host) > configured > reserved`。
-
-**冲突叠加**：命中共晖系统字典、同时又被容器/进程/compose 实际占用时，额外显示「冲突」标记（例如 DSM 网页端口被容器抢占）。
+| **系统** | 群晖自己保留的端口 | 别用，会跟群晖服务打架 |
+| **容器** | 被某个 Docker 容器占用了 | 已被占用 |
+| **进程** | 被群晖系统里的某个程序占用了 | 已被占用 |
+| **本工具** | PortLedger 自己占的端口 | 端口是它自己的 |
+| **已声明** | compose 文件里写了，但还没启动 | 建议避开 |
+| **已保留** | 你为某个项目预留的 | 不要给别人用 |
+| **空闲** | 没人用 | 可以用 |
+| **冲突**（额外标记） | 群晖系统端口被容器/程序占用了 | 建议尽快处理 |
 
 ---
 
-## 已知限制
+## 常见问题
 
-1. **主动扫描（`SCAN_TARGET_HOST`）默认禁用**。容器以 bridge 网络运行时，容器内的 `127.0.0.1` 指向容器自身而非宿主，因此主动 TCP 扫描无法发现宿主端口。宿主端口的完整视图由「宿主监听表 + Docker API + compose 声明」三个只读数据源提供。
-2. **宿主监听表依赖 `/proc` 挂载**。部分机型或安全策略下若无法只读挂载 `/proc`，该数据源会降级并在「数据源健康」中显式标记，列表不伪造数据。
-3. **群晖系统字典为版本化内置数据**。来源为 Synology 官方知识库，冲突项以官方为准；可用平台「系统字典」页覆盖名称或补充自定义条目。
-4. **进程名反查**依赖遍历 `/host/proc/<pid>/fd`，需要读取权限；失败时仅缺失进程名，不影响端口占用判定。
+**打开页面看到"部分数据源不可用"？**
+说明某一路探测没读到数据，页面上的信息可能不全。常见原因是 compose 目录不存在（还没建 `/volume1/docker` 或者路径写错了），或者 `/proc`、`docker.sock` 没有挂载成功。检查 `docker-compose.yml` 里的 volumes 部分，改完重启容器。
+
+**为什么列表里有那么多"系统"端口，有的其实没在跑？**
+因为群晖**保留**了这些端口，即使当前没服务在监听，也不建议你占用——避免哪天把服务启用起来就撞了。这是刻意设计，不是误报。
+
+**容器内部用 443，会不会和群晖的 443 冲突？**
+不会。容器用的是自己独立的网络，只有你在 `ports` 里写的那个宿主机端口（示例里的 8899）才会真正占用群晖的端口。
+
+**怎么改访问端口？**
+改 `docker-compose.yml` 里 `ports` 的左边那个数字，然后重建容器。注意群晖防火墙也要跟着放行新端口。
+
+**想从外网访问？**
+本工具**没有登录验证**，设计上只给内网用。要从外网访问，建议用群晖自带的反向代理加一层 HTTPS 和访问控制，不要直接把端口映射到公网。
+
+**主动扫描为什么默认关着？**
+容器用独立网络时，它看到的 `127.0.0.1` 是容器自己，不是群晖，所以主动扫描在这种模式下基本发现不了宿主机端口。宿主机的端口用前三路（系统监听、Docker 映射、compose 声明）已经能看全，所以这一路默认关闭。确实需要的话，设置 `SCAN_TARGET_HOST` 为你要探测的地址即可。
+
+**日志会不会把硬盘写满？**
+不会。运行日志写满 10MB 自动轮换、只留 5 份；每天的扫描明细保留 30 天后自动清理。
+
+**支持哪些群晖机型？**
+x86 和 ARM 架构的群晖都支持（镜像同时提供 `linux/amd64` 和 `linux/arm64`）。系统需要 DSM 7.x，配有 Container Manager（旧版叫 Docker）。
 
 ---
 
-## 开发
+## 从源码构建
+
+需要 Go 1.22 或更高版本。
 
 ```bash
-make vet test        # 静态检查 + 单元/集成测试
-make frontend-check  # 前端语法与 import 可达性校验
-make build-all       # 交叉编译 linux/amd64 + arm64
-bash scripts/e2e-smoke.sh ./bin/port-ledger-linux-amd64   # 端到端冒烟
-make image           # 多架构镜像（需 docker buildx）
+git clone https://github.com/Kyson-666/port-ledger.git
+cd port-ledger
+go build -trimpath -ldflags "-s -w" -tags netgo,osusergo -o port-ledger .
 ```
 
-Go 1.22+ 即可；前端为原生 ES Module，无构建步骤，`go:embed` 直接打包。
+前端是原生 ES Module，没有构建步骤——Go 编译时会把网页文件直接打包进程序，所以只需上面一条命令。
+
+想自测的话：
+
+```bash
+make check        # 静态检查 + 后端测试 + 前端校验
+make build-all    # 交叉编译 x86 与 ARM 两个架构
+make e2e          # 端到端冒烟
+```
 
 ---
 
-## 安全
+## 版本
 
-- 无认证（设计决策，面向内网）。请勿直接暴露于公网；如需外网访问，建议经群晖反向代理终结 TLS 并叠加访问控制。
-- `docker.sock` 与 `/proc` 均为**只读**挂载；本工具不发起任何写操作。
-- 容器以 root 运行（绑定 443、读取 `docker.sock` 所需），数据仅落在 `/data`。
+当前版本 **v1.0.0**。每个版本的变更见 [CHANGELOG.md](CHANGELOG.md)。
+
+## 其他文档
+
+详细的使用说明、部署步骤和常见问题，见本仓库的 [Wiki](https://github.com/Kyson-666/port-ledger/wiki)。
 
 ## 许可证
 
-MIT
+[MIT](LICENSE)

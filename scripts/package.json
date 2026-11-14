@@ -1,0 +1,13 @@
+{
+  "name": "port-ledger-scripts",
+  "private": true,
+  "type": "module",
+  "description": "PortLedger 开发脚本。前端渲染测试需要 jsdom（仅测试期依赖，不进镜像）。",
+  "scripts": {
+    "render-test": "node frontend-render-test.mjs",
+    "check": "node check-frontend.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^26.0.0"
+  }
+}

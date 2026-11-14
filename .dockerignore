@@ -1,0 +1,35 @@
+# 构建与运行中间产物，一律不进镜像构建上下文
+.git
+.github
+.gitignore
+.dockerignore
+
+# 本地工具与依赖缓存
+.tools
+node_modules
+**/node_modules
+
+# 构建产物
+bin
+dist
+*.exe
+port-ledger
+port-ledger.exe
+
+# 运行期数据
+data
+.localdata
+*.db
+*.db-wal
+*.db-shm
+*.log
+logs
+backups
+
+# 编辑器/系统残留
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp

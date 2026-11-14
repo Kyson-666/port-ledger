@@ -3,7 +3,7 @@ VERSION ?= $(shell grep -oP 'Version = "\K[^"]+' internal/config/version.go 2>/d
 LDFLAGS := -s -w
 TAGS := netgo,osusergo
 
-.PHONY: all build build-linux build-all test test-verbose vet lint frontend-check image clean run
+.PHONY: all build build-linux build-all test test-verbose vet frontend-check frontend-test check image run clean
 
 all: vet test build-all
 
@@ -27,8 +27,19 @@ test-verbose:
 vet:
 	$(GO) vet ./...
 
+# 前端静态校验：语法、import 可达性、硬编码颜色审计
 frontend-check:
 	node scripts/check-frontend.mjs
+
+# 前端渲染测试：需要 jsdom（首次执行 npm --prefix scripts install）
+frontend-test:
+	node scripts/frontend-render-test.mjs
+
+check: vet test frontend-check frontend-test
+
+# 端到端冒烟：需先 make build
+e2e: build
+	bash scripts/e2e-smoke.sh bin/port-ledger.exe
 
 image:
 	docker buildx build --platform linux/amd64,linux/arm64 \

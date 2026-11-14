@@ -1,13 +1,23 @@
 # 构建产物
+/bin/
+/dist/
 /port-ledger
 /port-ledger.exe
-/dist/
 *.exe
 
-# 运行期数据（默认挂载到 /data）
+# 依赖缓存（前端测试用，不进仓库也不进镜像）
+node_modules/
+**/node_modules/
+
+# 运行期数据（默认映射到 /data）
 /data/
-/.tools/
+/.localdata/
+*.db
+*.db-wal
+*.db-shm
+*.log
+/logs/
+/backups/
 
 # 本地临时
-*.log
-tmp/
+/tmp/
