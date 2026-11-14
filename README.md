@@ -158,6 +158,8 @@ sudo docker compose up -d
 | `TLS_CERT` / `TLS_KEY` | 空 | 用你自己的证书，优先于自签 |
 | `PROC_ROOT` | `/host/proc` | 群晖进程信息在容器里的位置，一般不用改 |
 | `DOCKER_HOST` | `unix:///var/run/docker.sock` | Docker 的通信地址，一般不用改 |
+| `SELF_CONTAINER_NAME` | `port-ledger` | 用于识别"本工具"自己占的端口，一般不用改 |
+| `SCAN_TARGET_HOST` | 空（关闭） | 主动探测的目标地址。默认关闭，原因见下方「常见问题」 |
 
 ---
 
@@ -226,7 +228,7 @@ x86 和 ARM 架构的群晖都支持（镜像同时提供 `linux/amd64` 和 `lin
 
 ## 从源码构建
 
-需要 Go 1.22 或更高版本。
+需要 Go 1.27 或更高版本（与 `go.mod`、构建镜像保持一致）。
 
 ```bash
 git clone https://github.com/Kyson-666/port-ledger.git

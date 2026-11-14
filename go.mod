@@ -1,6 +1,6 @@
 module github.com/kyson-666/port-ledger
 
-go 1.27.4
+go 1.27
 
 require (
 	gopkg.in/yaml.v3 v3.0.1
