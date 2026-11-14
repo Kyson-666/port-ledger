@@ -1,0 +1,13 @@
+# 构建产物
+/port-ledger
+/port-ledger.exe
+/dist/
+*.exe
+
+# 运行期数据（默认挂载到 /data）
+/data/
+/.tools/
+
+# 本地临时
+*.log
+tmp/

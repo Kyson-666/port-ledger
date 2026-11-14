@@ -1,0 +1,85 @@
+/* PortLedger Design Tokens —— 配色/组件/交互的唯一取值来源
+   对应 deliverables/port-ledger-design-system-2026-11-14.md §2
+   组件与页面禁止写死 hex / 圆角 / 动效，一律引用本文件变量。 */
+
+:root {
+  /* ---- 品牌色 Brand ---- */
+  --pl-brand-50: #EFF6FF;
+  --pl-brand-100: #DBEAFE;
+  --pl-brand-200: #BFDBFE;
+  --pl-brand-500: #3B82F6;
+  --pl-brand-600: #2563EB;
+  --pl-brand-700: #1D4ED8;
+  --pl-brand-800: #1E40AF;
+
+  /* ---- 中性阶 Neutral ---- */
+  --pl-n-0: #FFFFFF;
+  --pl-n-50: #F7F8FA;
+  --pl-n-100: #F1F3F6;
+  --pl-n-200: #E5E9F0;
+  --pl-n-300: #C9D0DC;
+  --pl-n-400: #8A94A6;
+  --pl-n-600: #5A6474;
+  --pl-n-800: #1F2329;
+  --pl-n-900: #101318;
+
+  /* ---- 语义色 Semantic ---- */
+  --pl-success-50: #EAF7EE;
+  --pl-success-600: #16A34A;
+  --pl-success-800: #157A3C;
+  --pl-warning-50: #FFF3E8;
+  --pl-warning-600: #EA580C;
+  --pl-warning-800: #B4460A;
+  --pl-danger-50: #FEECEC;
+  --pl-danger-600: #DC2626;
+  --pl-danger-800: #B01C1C;
+  --pl-info-50: var(--pl-brand-50);
+  --pl-info-600: var(--pl-brand-600);
+  --pl-info-800: var(--pl-brand-800);
+
+  /* ---- 版面 ---- */
+  --pl-font-sans: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --pl-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace;
+
+  --pl-font-xs: 11px;
+  --pl-font-sm: 12px;
+  --pl-font-md: 13px;
+  --pl-font-lg: 14px;
+  --pl-font-xl: 15px;
+
+  --pl-weight-regular: 400;
+  --pl-weight-medium: 500;
+
+  --pl-line-body: 1.6;
+  --pl-line-heading: 1.4;
+
+  --pl-space-1: 4px;
+  --pl-space-2: 8px;
+  --pl-space-3: 12px;
+  --pl-space-4: 16px;
+  --pl-space-5: 20px;
+  --pl-space-6: 24px;
+
+  --pl-radius-sm: 6px;
+  --pl-radius-md: 8px;
+  --pl-radius-lg: 12px;
+
+  --pl-border: 1px solid var(--pl-n-200);
+
+  --pl-shadow-pop: 0 8px 24px rgba(16, 19, 24, .08);
+
+  --pl-motion-fast: 120ms;
+  --pl-motion-base: 200ms;
+  --pl-ease: ease-out;
+
+  --pl-row-h: 40px;
+  --pl-focus: 0 0 0 2px var(--pl-brand-200);
+
+  /* 布局 */
+  --pl-nav-w: 208px;
+  --pl-topbar-h: 52px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --pl-motion-fast: 0ms; --pl-motion-base: 0ms; }
+}

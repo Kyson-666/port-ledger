@@ -1,0 +1,11 @@
+services:
+  hostmode:
+    image: somesvc
+    network_mode: host
+    ports:
+      - target: 6060
+        mode: host
+  plain:
+    image: app
+    ports:
+      - 3000:3000/udp

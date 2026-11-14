@@ -1,0 +1,31 @@
+# PortLedger · 群晖 DSM 7.x（Container Manager）部署样例
+# 容器内固定监听 443，宿主端口 8899 仅为示例，可按需修改。
+services:
+  port-ledger:
+    image: ghcr.io/kyson-666/port-ledger:v1.0.0
+    container_name: port-ledger
+    restart: unless-stopped
+    ports:
+      - "8899:443"                 # 宿主端口由你自定；容器内固定 443
+    environment:
+      TZ: Asia/Shanghai
+      ADMIN_PORT: "443"            # 容器内监听端口（默认 443）
+      TLS_SELF_SIGNED: "false"     # true 时容器自签证书并以 https 提供服务（需重启）
+      DATA_DIR: /data
+      SCAN_HOST_PROC: "true"       # 宿主监听表（只读挂载 /host/proc）
+      SCAN_DOCKER_SOCKET: "true"   # Docker API（只读挂载 docker.sock）
+      SCAN_COMPOSE_DIR: /compose   # compose 声明目录
+      SCAN_RANGES: "1-65535"
+      SCAN_ON_START: "true"        # 空库首启自动全量扫描
+      SCAN_INTERVAL: "300"         # 周期扫描（秒），0=仅手动
+      LOG_LEVEL: info
+      # SCAN_TARGET_HOST: "127.0.0.1"  # 可选：主动扫描目标（bridge 下 127.0.0.1 只代表容器自身，默认禁用）
+      # SELF_CONTAINER_NAME: "port-ledger"
+    volumes:
+      - /volume1/docker/port-ledger/data:/data
+      - /volume1/docker/port-ledger/logs:/data/logs
+      - /volume1/docker/port-ledger/backups:/data/backups
+      - /proc:/host/proc:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /volume1/docker:/compose:ro
+      - /etc/localtime:/etc/localtime:ro
