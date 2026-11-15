@@ -1,7 +1,7 @@
 // P8 设置 —— 模式 P-B（表单）+ P-E（确认）
 import { h, fmtTime } from '../lib/dom.js';
-import { api, readFileAsText, downloadText } from '../lib/api.js';
-import { Button, Card, Field, Input, Switch, confirmDialog, toast, Badge } from '../components/primitives.js';
+import { api, readFileAsText } from '../lib/api.js';
+import { Button, Card, Field, Input, Switch, confirmDialog, toast } from '../components/primitives.js';
 
 let st = { data: null, health: null, loading: true, error: '' };
 
@@ -87,6 +87,7 @@ export async function render(ctx) {
       if (changed.has('scan_host_proc')) payload.scan_host_proc = hostProcS.querySelector('input').checked;
       if (changed.has('scan_docker_socket')) payload.scan_docker_socket = dockerSockS.querySelector('input').checked;
       if (changed.has('scan_compose_dir')) payload.scan_compose_dir = composeDirI.value.trim();
+      if (changed.has('scan_reverse_proxy')) payload.scan_reverse_proxy = rproxyS.querySelector('input').checked;
       if (changed.has('tls_self_signed')) payload.tls_self_signed = tlsS.querySelector('input').checked;
       try {
         const res = await api.putSettings(payload);
@@ -158,7 +159,7 @@ export async function render(ctx) {
   return wrap;
 }
 
-function changeDesc(set) { return [...set].map(k => ({ scan_ranges: '扫描范围', scan_interval: '扫描周期', scan_on_start: '首启扫描', scan_host_proc: '宿主监听表', scan_docker_socket: 'Docker API', scan_compose_dir: 'Compose 目录', tls_self_signed: 'TLS 自签' }[k] || k)).join('、'); }
+function changeDesc(set) { return [...set].map(k => ({ scan_ranges: '扫描范围', scan_interval: '扫描周期', scan_on_start: '首启扫描', scan_host_proc: '宿主监听表', scan_docker_socket: 'Docker API', scan_compose_dir: 'Compose 目录', scan_reverse_proxy: '群晖反向代理', tls_self_signed: 'TLS 自签' }[k] || k)).join('、'); }
 
 function scanStatusLabel(s) { return { ok: '正常', partial: '部分完成', failed: '失败', running: '进行中' }[s] || s; }
 

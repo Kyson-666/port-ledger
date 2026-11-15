@@ -2,7 +2,7 @@
 import { h } from '../lib/dom.js';
 import { api } from '../lib/api.js';
 import { Card, Button, Skeleton, EmptyState, Table, Badge } from '../components/primitives.js';
-import { Metric, RangeBar, HealthIndicator, PortBadge } from '../components/domain.js';
+import { Metric, RangeBar } from '../components/domain.js';
 import { fmtTime, fmtClock } from '../lib/dom.js';
 
 export async function render(ctx) {
@@ -13,8 +13,13 @@ export async function render(ctx) {
   let sum, audit;
   try {
     [sum, audit] = await Promise.all([api.health().then(async (hh) => {
-      const s = await api.ports({ page_size: 1 });
-      return { health: hh, counts: s.counts, last: s.last_scan };
+      const [s, f] = await Promise.all([
+        api.ports({ page_size: 1 }),
+        // 空闲数：取 1024–65535（TCP）的空闲区间并求和，与统计卡标注范围一致
+        api.free({ from: 1024, to: 65535, protocol: 'tcp', count: 1 }),
+      ]);
+      const freeCount = (f.ranges || []).reduce((n, r) => n + (r.count || 0), 0);
+      return { health: hh, counts: s.counts, last: s.last_scan, freeCount };
     }), api.audit({ limit: 5 })]);
   } catch (e) {
     wrap.textContent = '';
@@ -29,13 +34,11 @@ export async function render(ctx) {
   const last = sum.last || {};
   const scanning = sum.health.scanning;
 
-  // A 页头（重新扫描统一在顶栏；此处保留数据源健康徽标）
+  // A 页头（健康指示器与重新扫描均由顶栏统一承载，此处不再重复）
   wrap.appendChild(h('div.pl-page-head', null,
     h('h1', null, '端口总览',
       h('span.pl-count-label', null, last.finished_at ? `上次扫描 ${fmtClock(last.finished_at)}` : '尚未完成扫描')),
-    h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
-      HealthIndicator(health),
-    )));
+  ));
 
   if (scanning) wrap.appendChild(h('div.pl-inline-warning', null, '正在进行首次全量扫描，数据将在完成后自动刷新…'));
   if (health.some(x => x.enabled !== false && !x.ok)) {
@@ -47,7 +50,7 @@ export async function render(ctx) {
   metrics.appendChild(Metric('已占用', occupied, { sub: '反代 / 容器 / 进程 / 已声明', onClick: () => ctx.navigate('/ports?state=rproxy,in-use(docker),in-use(host)') }));
   metrics.appendChild(Metric('系统端口', counts['system'] || 0, { sub: '群晖保留，不建议使用', onClick: () => ctx.navigate('/ports?state=system') }));
   metrics.appendChild(Metric('已保留', counts['reserved'] || 0, { sub: '为待部署项目预留', onClick: () => ctx.navigate('/reservations') }));
-  metrics.appendChild(Metric('空闲', sum.health ? sum.free_count : '—', { sub: `范围 1024-65535`, onClick: () => ctx.navigate('/free') }));
+  metrics.appendChild(Metric('空闲', sum.freeCount ?? '—', { sub: `范围 1024-65535`, onClick: () => ctx.navigate('/free') }));
   wrap.appendChild(metrics);
 
   // C 端口区间占用条

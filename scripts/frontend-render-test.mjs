@@ -40,16 +40,22 @@ const fixtures = {
     config: { admin_port: 443, scan_interval: 300, scan_ranges: '1-65535' },
   },
   '/api/ports': {
-    total: 3, page: 1, page_size: 100,
+    total: 4, page: 1, page_size: 100,
     counts: { system: 1843, 'in-use(docker)': 12, 'in-use(host)': 8, configured: 3, reserved: 1, free: 0, conflict: 1 },
     last_scan: { id: 3, status: 'ok', finished_at: '2026-11-14T21:58:00+08:00' },
     items: [
       { port: 5000, protocol: 'tcp', state: 'system', state_label: '系统', conflict: false, name: 'DSM 网页 HTTP', name_source: 'auto', source: '系统字典', source_kind: 'dict', observed_at: '2026-11-14T21:58:00+08:00' },
       { port: 6690, protocol: 'tcp', state: 'system', state_label: '系统', conflict: true, name: 'Synology Drive 文件同步与备份', name_source: 'auto', source: '系统字典', source_kind: 'dict', container_name: 'drive' },
       { port: 9000, protocol: 'tcp', state: 'in-use(docker)', state_label: '容器', conflict: false, name: 'Portainer', name_source: 'user', project: 'portainer', source: 'portainer · portainer/portainer-ce', source_kind: 'docker' },
+      { port: 25000, protocol: 'tcp', state: 'free', state_label: '空闲', conflict: false, name: '', source: '—', source_kind: '-' },
     ],
   },
   '/api/audit': { total: 1, items: [{ id: 1, ts: '2026-11-14T21:59:00+08:00', actor: '本地', action: 'rename', target: '端口 9000/TCP', detail: '名称 — → Portainer' }] },
+  '/api/free': {
+    from: 1024, to: 65535, count: 1, protocol: 'tcp', based_on: '2026-11-14T21:58:00+08:00', truncated: true,
+    ports: [1024],
+    ranges: [{ from: 1024, to: 1400, count: 377 }, { from: 7000, to: 7999, count: 1000 }],
+  },
   '/api/settings': {
     values: { scan_ranges: '1-65535', scan_interval: 300, scan_on_start: true, scan_host_proc: true, scan_docker_socket: true, scan_compose_dir: '/compose', admin_port: 443, tls_self_signed: false, webhook: '' },
     env_defaults: { admin_port: 443, scan_ranges: '1-65535' },
@@ -99,6 +105,7 @@ console.log('前端渲染冒烟测试（jsdom）');
   check('数据源健康列出三项', ['proc', 'docker', 'compose'].every(k => text.includes(k)));
   check('降级提示可见', text.includes('部分数据源不可用') || text.includes('部分数据可能不全'));
   check('最近变动展示审计', text.includes('最近变动') && text.includes('rename'));
+  check('空闲数由 /api/free 区间汇总（非 undefined）', !text.includes('undefined') && text.includes('1377'));
 }
 
 {
@@ -114,8 +121,20 @@ console.log('前端渲染冒烟测试（jsdom）');
   check('冲突叠加态渲染', !!node.querySelector('.pl-badge--conflict') && text.includes('冲突'));
   check('容器徽标为中性灰', !!node.querySelector('.pl-badge--docker'));
   check('命名/详情/保留 行内操作存在', text.includes('命名') && text.includes('详情'));
-  check('分页显示总数', text.includes('共 3 条'));
+  check('分页显示总数', text.includes('共 4 条'));
   check('触发 /api/ports 请求', calls.some(u => u.startsWith('/api/ports')));
+  // 批量选择：勾选空闲行后应出现「已选 N 项」批量条，且勾选态保持
+  const cbs = [...node.querySelectorAll('input.pl-checkbox')];
+  const usable = cbs.find(c => !c.disabled);
+  check('空闲行复选框可用', !!usable);
+  if (usable) {
+    usable.checked = true;
+    usable.dispatchEvent(new dom.window.Event('change'));
+    check('勾选后出现批量操作条', node.textContent.includes('已选 1 项'));
+  }
+  // 同页重渲染不得清空多选与筛选（此前每次 render 都重置 state）
+  const again = await render({ ...ctx, rerender: () => {} });
+  check('重渲染后保留勾选', again.textContent.includes('已选 1 项'));
 }
 
 {
@@ -158,13 +177,19 @@ console.log('前端渲染冒烟测试（jsdom）');
 {
   console.log('P8 设置');
   const { render } = await load('pages/settings.js');
-  const text = (await render(ctx)).textContent;
+  const node = await render(ctx);
+  const text = node.textContent;
   check('三个分组齐全', ['扫描设置', '数据源', '服务'].every(k => text.includes(k)));
   check('无 webhook 残留', !text.includes('Webhook') && !text.includes('webhook'));
   check('只读项标注环境变量注入', text.includes('ADMIN_PORT'));
   check('TLS 提示需重启', text.includes('重启容器后生效'));
   check('备份与恢复入口', text.includes('备份与恢复') && text.includes('导出台账 JSON'));
   check('系统信息含版本', text.includes('系统信息') && text.includes('1.0.3'));
+  // 开关统一使用组件自带 label：文字与滑块同处一个 label，且覆盖全部开关项
+  const swLabels = [...node.querySelectorAll('label.pl-switch')].map(l => l.textContent.trim());
+  check('数据源开关含「群晖反向代理」', text.includes('群晖反向代理'));
+  check('开关文字并入组件 label（不手拼 span）',
+    ['首次启动自动全量扫描', '宿主监听表', 'Docker API', '群晖反向代理', '启用自签证书'].every(k => swLabels.some(s => s.includes(k))));
 }
 
 console.log(`\n结果：通过 ${pass} 项，失败 ${fail} 项。`);

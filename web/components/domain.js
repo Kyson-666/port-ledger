@@ -68,7 +68,7 @@ export function HealthIndicator(health, { compact = false } = {}) {
 }
 
 export function RangeBar(counts) {
-  const keys = ['system', 'in-use(docker)', 'in-use(host)', 'configured', 'reserved', 'self', 'free'];
+  const keys = ['system', 'rproxy', 'in-use(docker)', 'in-use(host)', 'configured', 'reserved', 'self', 'free'];
   const total = keys.reduce((s, k) => s + (counts[k] || 0), 0) || 1;
   const bar = h('div.pl-rangebar');
   for (const k of keys) {

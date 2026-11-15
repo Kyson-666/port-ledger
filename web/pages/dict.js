@@ -1,6 +1,6 @@
 // P6 系统端口字典 —— 模式 P-A（列表）+ P-B（表单）+ P-E（确认）
 import { h } from '../lib/dom.js';
-import { api, readFileAsText, downloadText } from '../lib/api.js';
+import { api, readFileAsText } from '../lib/api.js';
 import {
   Button, Card, Chip, Field, Input, Select, Table, EmptyState, openModal,
   confirmDialog, toast, Badge,

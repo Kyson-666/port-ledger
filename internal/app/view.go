@@ -233,6 +233,7 @@ func (a *App) buildItems(includeFree bool, from, to int) ([]PortItem, *store.Sca
 		if !ok {
 			continue
 		}
+		occupied[k] = true // 占位：避免随后的 free 枚举把它再列一次（否则列表出现重复行）
 		it := PortItem{
 			Port: port, Protocol: proto, State: reconcile.StateFree,
 			StateLabel: StateLabel(reconcile.StateFree),

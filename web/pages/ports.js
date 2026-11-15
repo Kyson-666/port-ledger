@@ -1,6 +1,6 @@
 // P2 端口列表（核心页）+ P3 命名抽屉
 // 模式：P-A（列表）+ P-B（表单，抽屉承载）
-import { h, fmtClock, fmtTime } from '../lib/dom.js';
+import { h, clear, fmtClock, fmtTime } from '../lib/dom.js';
 import { api } from '../lib/api.js';
 import {
   Button, Card, Chip, Field, Input, Textarea, Select, TagInput, Table,
@@ -35,6 +35,13 @@ function syncURL() {
   if (state.page > 1) p.set('page', state.page);
   const qs = p.toString();
   history.replaceState(null, '', '/ports' + (qs ? '?' + qs : ''));
+  // 记录已同步的 URL：页内重渲染据此判断「是否为新导航」，避免误重置多选
+  state._urlKey = location.pathname + location.search;
+}
+
+// filterKey 概括当前筛选条件；条件变化时清空多选，避免选中已不可见的行。
+function filterKey() {
+  return JSON.stringify([state.q, state.states, state.protocol, state.source, state.project]);
 }
 
 async function load(ctx) {
@@ -48,7 +55,14 @@ async function load(ctx) {
     state.total = res.total || 0;
     state.counts = res.counts || {};
     state.last = res.last_scan || null;
-    state.selected.clear();
+    const fk = filterKey();
+    if (state._filterKey !== fk) { state.selected.clear(); state._filterKey = fk; }
+    // 剔除已不再空闲的可见行选择（如刚被批量保留）：避免残留的勾选与「已选 N 项」计数
+    const freeKeys = new Set(state.rows.filter(r => r.state === 'free').map(key));
+    for (const r of state.rows) {
+      const k = key(r);
+      if (state.selected.has(k) && !freeKeys.has(k)) state.selected.delete(k);
+    }
   } catch (e) {
     state.error = e.message;
   } finally {
@@ -58,8 +72,10 @@ async function load(ctx) {
 }
 
 export async function render(ctx) {
-  if (!state || state._fresh) { initState(ctx); }
-  state._fresh = true;
+  // 仅在首次进入、或 URL 变化（如从总览卡片跳转带筛选）时重建 state；
+  // 页内重渲染保留 state，多选与筛选条件不丢失。
+  const urlKey = location.pathname + location.search;
+  if (!state || state._urlKey !== urlKey) { initState(ctx); state._urlKey = urlKey; }
   await load(ctx);
 
   const wrap = h('div');
@@ -123,15 +139,19 @@ export async function render(ctx) {
   } }));
   wrap.appendChild(toolbar);
 
-  // C 批量操作条
-  if (state.selected.size > 0) {
-    const bar = h('div', { style: { display: 'flex', gap: '12px', alignItems: 'center', background: 'var(--pl-brand-50)', padding: '8px 12px', borderRadius: 'var(--pl-radius-md)', marginBottom: '12px' } },
+  // C 批量操作条（局部更新：勾选不触发表格重载，保持滚动与勾选状态）
+  const barHost = h('div');
+  const renderBar = () => {
+    clear(barHost);
+    if (state.selected.size === 0) return;
+    barHost.appendChild(h('div', { style: { display: 'flex', gap: '12px', alignItems: 'center', background: 'var(--pl-brand-50)', padding: '8px 12px', borderRadius: 'var(--pl-radius-md)', marginBottom: '12px' } },
       h('span', { style: { fontSize: 'var(--pl-font-sm)' } }, `已选 ${state.selected.size} 项`),
       Button('批量保留', { variant: 'primary', onClick: () => batchReserve(ctx) }),
       Button('取消选择', { variant: 'text', onClick: () => { state.selected.clear(); ctx.rerender(); } }),
-    );
-    wrap.appendChild(bar);
-  }
+    ));
+  };
+  renderBar();
+  wrap.appendChild(barHost);
 
   if (state.error) {
     wrap.appendChild(h('div.pl-inline-error', null, h('span', null, '加载失败：' + state.error), Button('重试', { variant: 'text', onClick: async () => { await load(ctx); ctx.rerender(); } })));
@@ -143,7 +163,7 @@ export async function render(ctx) {
       const cb = Checkbox({ checked: state.selected.has(key(r)) , ariaLabel: `选择端口 ${r.port}` });
       cb.disabled = r.state !== 'free';
       if (cb.disabled) cb.title = '仅空闲端口可批量保留';
-      cb.addEventListener('change', () => { if (cb.checked) state.selected.add(key(r)); else state.selected.delete(key(r)); ctx.rerender(); });
+      cb.addEventListener('change', () => { if (cb.checked) state.selected.add(key(r)); else state.selected.delete(key(r)); renderBar(); });
       return cb;
     } },
     { title: '端口', width: '70px', render: r => PortNumber(r.port) },

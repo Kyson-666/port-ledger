@@ -1,7 +1,7 @@
 // P7 审计与日志 —— 双 Tab，模式 P-A（列表）
 import { h, fmtTime } from '../lib/dom.js';
 import { api } from '../lib/api.js';
-import { Button, Card, Chip, Input, Select, Table, EmptyState, Tabs, Pagination, Badge, toast } from '../components/primitives.js';
+import { Button, Chip, Input, Select, Table, EmptyState, Tabs, Pagination, Badge, toast } from '../components/primitives.js';
 
 let st = { tab: 'audit', action: '', q: '', audit: [], logs: [], dates: [], loading: true, error: '', page: 1, pageSize: 100 };
 
@@ -35,25 +35,25 @@ export async function render(ctx) {
   wrap.appendChild(Tabs([
     { key: 'audit', label: '操作审计' },
     { key: 'log', label: '应用日志' },
-  ], { active: st.tab, onChange: async (k) => { st.tab = k; st.action = ''; st.q = ''; await load(); ctx.rerender(); } }));
+  ], { active: st.tab, onChange: async (k) => { st.tab = k; st.action = ''; st.q = ''; st.page = 1; await load(); ctx.rerender(); } }));
 
   const toolbar = h('div.pl-toolbar');
   if (st.tab === 'audit') {
     for (const [k, label] of [['', '全部动作'], ['rename', '命名'], ['reserve', '保留'], ['unreserve', '释放'], ['dict_override', '字典覆盖'], ['dict_import', '字典导入'], ['setting_update', '设置变更']]) {
-      toolbar.appendChild(Chip(label, { pressed: st.action === k, onClick: async () => { st.action = k; await load(); ctx.rerender(); } }));
+      toolbar.appendChild(Chip(label, { pressed: st.action === k, onClick: async () => { st.action = k; st.page = 1; await load(); ctx.rerender(); } }));
     }
     const s = Input({ value: st.q, placeholder: '搜索端口 / 对象' });
     s.style.maxWidth = '200px';
-    let t; s.addEventListener('input', () => { clearTimeout(t); t = setTimeout(async () => { st.q = s.value.trim(); await load(); ctx.rerender(); }, 250); });
+    let t; s.addEventListener('input', () => { clearTimeout(t); t = setTimeout(async () => { st.q = s.value.trim(); st.page = 1; await load(); ctx.rerender(); }, 250); });
     toolbar.appendChild(s);
   } else {
     const lv = Select([{ value: '', label: '全部级别' }, { value: 'debug', label: 'debug' }, { value: 'info', label: 'info' }, { value: 'warn', label: 'warn' }, { value: 'error', label: 'error' }],
-      { value: st.action, onChange: async (e) => { st.action = e.target.value; await load(); ctx.rerender(); } });
+      { value: st.action, onChange: async (e) => { st.action = e.target.value; st.page = 1; await load(); ctx.rerender(); } });
     lv.style.width = '120px';
     toolbar.appendChild(lv);
     const s = Input({ value: st.q, placeholder: '搜索日志内容' });
     s.style.maxWidth = '220px';
-    let t; s.addEventListener('input', () => { clearTimeout(t); t = setTimeout(async () => { st.q = s.value.trim(); await load(); ctx.rerender(); }, 250); });
+    let t; s.addEventListener('input', () => { clearTimeout(t); t = setTimeout(async () => { st.q = s.value.trim(); st.page = 1; await load(); ctx.rerender(); }, 250); });
     toolbar.appendChild(s);
     if (st.dates.length) {
       const d = Select([{ value: '', label: '扫描明细日期' }, ...st.dates.map(x => ({ value: x, label: x }))],

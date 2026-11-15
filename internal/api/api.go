@@ -93,9 +93,8 @@ func jsonMethodNotAllowed(next http.Handler) http.Handler {
 		rec := &capStatusWriter{ResponseWriter: w, status: 200}
 		next.ServeHTTP(rec, r)
 		if rec.status == http.StatusMethodNotAllowed && !rec.wrote {
-			// 未写 body（标准库 405 在 handler 前生成），重写响应。
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			w.WriteHeader(http.StatusMethodNotAllowed)
+			// 未写 body（标准库 405 在 handler 前生成），改写为 JSON 错误体。
+			// 注意：仅由 writeJSON 写入一次状态码，勿在此重复 WriteHeader（会触发 superfluous 警告）。
 			writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"error": "该接口不支持 " + r.Method + " 方法"})
 			return
 		}

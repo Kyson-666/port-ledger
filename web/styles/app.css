@@ -55,6 +55,7 @@ h3 { font-size: var(--pl-font-md); }
   padding: 0 var(--pl-space-4); background: var(--pl-n-0); border-bottom: var(--pl-border);
   position: sticky; top: 0; z-index: 20;
 }
+.pl-topbar .pl-search { flex: 1; max-width: 360px; }
 .pl-topbar-spacer { flex: 1; }
 .pl-content { padding: var(--pl-space-5); flex: 1; min-width: 0; }
 
@@ -261,4 +262,5 @@ table.pl-table { width: 100%; border-collapse: collapse; background: var(--pl-n-
   .pl-cardlist .pl-card { margin-bottom: var(--pl-space-3); }
   .pl-drawer { width: 100%; }
   .pl-topbar { flex-wrap: wrap; height: auto; padding: var(--pl-space-2) var(--pl-space-3); }
+  .pl-topbar .pl-search { max-width: none; flex-basis: 100%; }
 }

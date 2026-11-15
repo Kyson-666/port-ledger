@@ -1,7 +1,7 @@
 // PortLedger 管理台入口：外壳、路由、全局反馈
 import { h, mount, clear, fmtClock } from './lib/dom.js';
 import { api } from './lib/api.js';
-import { initHosts, Button, toast } from './components/primitives.js';
+import { initHosts, Button, Input, toast } from './components/primitives.js';
 import { HealthIndicator } from './components/domain.js';
 
 const ROUTES = [
@@ -15,7 +15,7 @@ const ROUTES = [
 ];
 
 const app = document.getElementById('app');
-let pageHost, healthHost, scanBtn, lastScanHost;
+let pageHost, healthHost, scanBtn, lastScanHost, topbarSearch;
 let currentPath = '/';
 let health = null;
 
@@ -40,13 +40,31 @@ function shell() {
   }
   navWrap.appendChild(h('div.pl-nav-foot', null, 'v1.0.3 · 无认证（内网）'));
 
+  // 全局搜索（设计稿 §1.2）：回车跳转端口列表并带筛选条件。
+  // 端口列表页内已有「输入即时过滤」搜索框，此时隐藏顶栏这一个，避免同页两个搜索框。
+  const search = Input({ placeholder: '搜索端口 / 名称 / 容器 / 项目', ariaLabel: '全局搜索' });
+  search.className = 'pl-input pl-search';
+  search.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { const v = search.value.trim(); navigate('/ports' + (v ? '?q=' + encodeURIComponent(v) : '')); }
+  });
+  // 「/」聚焦当前页可见的搜索框（R-09）：端口列表页聚焦页内过滤框，其余页聚焦全局搜索
+  document.addEventListener('keydown', (e) => {
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (e.key === '/' && tag !== 'INPUT' && tag !== 'TEXTAREA') {
+      const pageSearch = document.querySelector('.pl-toolbar input.pl-input');
+      const target = search.offsetParent !== null ? search : pageSearch;
+      if (target) { e.preventDefault(); target.focus(); }
+    }
+  });
+
   healthHost = h('span');
   lastScanHost = h('span', { style: { fontSize: 'var(--pl-font-xs)', color: 'var(--pl-n-400)', whiteSpace: 'nowrap' } });
   scanBtn = Button('重新扫描', { variant: 'primary', onClick: doScan });
 
-  // 搜索框只在端口列表页内提供（页内实时过滤）；topbar 仅保留 全局重新扫描 / 健康 / 上次扫描，避免与页内控件重复
+  // 「重新扫描」为全站唯一入口（设计稿 §1.3：每页 primary ≤ 1）
   const topbar = h('header.pl-topbar', null,
-    h('div.pl-topbar-spacer'), lastScanHost, healthHost, scanBtn);
+    search, h('div.pl-topbar-spacer'), lastScanHost, healthHost, scanBtn);
+  topbarSearch = search;
 
   pageHost = h('main.pl-content');
   const main = h('div.pl-main', null, topbar, pageHost);
@@ -61,6 +79,8 @@ function setActive(path) {
     if (a.dataset.path === location.pathname || a.dataset.path === path) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
   });
+  // 端口列表页内已有即时过滤框 → 隐藏顶栏全局搜索，避免同页两个搜索框
+  if (topbarSearch) topbarSearch.style.display = path === '/ports' ? 'none' : '';
 }
 
 const ctx = {

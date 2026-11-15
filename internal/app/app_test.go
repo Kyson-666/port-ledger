@@ -385,3 +385,47 @@ func TestValidateSettings(t *testing.T) {
 		}
 	}
 }
+
+// 回归：仅有用户台账（无观测）的端口在空闲筛选中只应出现一次。
+// 此前 buildItems 未把该类端口计入 occupied，free 枚举会再列一次，列表出现重复行。
+func TestMetaOnlyPortNotDuplicatedInFreeFilter(t *testing.T) {
+	a := newTestApp(t)
+	seedScan(t, a, []store.Observation{
+		{Port: 5000, Protocol: "tcp", State: "system", Source: "dict"},
+	}, "ok")
+	if err := a.Store.PutPortMeta(store.PortMeta{Port: 25000, Protocol: "tcp", Name: "我的服务", UpdatedBy: "test"}); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := a.List(ListQuery{States: []string{"free"}, From: 25000, To: 25000, PageSize: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, it := range res.Items {
+		if it.Port == 25000 && it.Protocol == "tcp" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("端口 25000/tcp 在空闲筛选中出现 %d 次，期望 1 次", n)
+	}
+}
+
+// 回归：metaOnly 端口仍应参与列表展示（不可因为去重而消失）。
+func TestMetaOnlyPortVisibleInList(t *testing.T) {
+	a := newTestApp(t)
+	seedScan(t, a, []store.Observation{
+		{Port: 5000, Protocol: "tcp", State: "system", Source: "dict"},
+	}, "ok")
+	if err := a.Store.PutPortMeta(store.PortMeta{Port: 26000, Protocol: "tcp", Name: "台账端口", UpdatedBy: "test"}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := a.List(ListQuery{From: 26000, To: 26000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Items) != 1 || res.Items[0].Name != "台账端口" {
+		t.Fatalf("仅有台账的端口应展示且带用户命名: %+v", res.Items)
+	}
+}

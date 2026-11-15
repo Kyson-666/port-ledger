@@ -80,6 +80,25 @@ has "空闲端口返回 5 个" "$F" '"count":5'
 has "连续区间折叠为 1 段" "$F" '"from":26000,"to":26010,"count":11'
 has "带上次扫描时间基准" "$F" '"based_on"'
 
+# 台账端口（无观测）在空闲筛选中只应出现一次：此前 free 枚举会与「仅有台账」行重复
+curl -s -X PUT "$BASE/api/ports/27000" -H 'Content-Type: application/json' \
+  -d '{"protocol":"tcp","name":"台账-only"}' > /dev/null
+DUPDOC=$(curl -s "$BASE/api/ports?state=free&from=27000&to=27000")
+DUP=$(printf '%s' "$DUPDOC" | grep -o '"port":27000,"protocol":"tcp"' | wc -l | tr -d ' ')
+if [ "$DUP" = "1" ]; then ok "仅有台账的端口在空闲筛选中不重复（tcp 仅 1 行）"; else bad "仅有台账的 tcp 端口在空闲筛选中出现 $DUP 次"; fi
+has "台账行仍展示用户命名" "$DUPDOC" '台账-only'
+curl -s -X PUT "$BASE/api/ports/27000" -H 'Content-Type: application/json' -d '{"protocol":"tcp"}' > /dev/null
+
+echo "== T4b 设置项保存与回读 =="
+S1=$(curl -s -X PUT "$BASE/api/settings" -H 'Content-Type: application/json' -d '{"scan_reverse_proxy":false}')
+has "反向代理开关可保存" "$S1" '"scan_reverse_proxy":false'
+S2=$(curl -s "$BASE/api/settings")
+has "反向代理开关回读生效" "$S2" '"scan_reverse_proxy":false'
+S3=$(curl -s -X PUT "$BASE/api/settings" -H 'Content-Type: application/json' -d '{"scan_reverse_proxy":true}')
+has "反向代理开关可改回" "$S3" '"scan_reverse_proxy":true'
+S4=$(curl -s -X POST "$BASE/api/settings" -H 'Content-Type: application/json' -d '{"scan_reverse_proxy":false}')
+has "设置项拒绝 POST 方法" "$S4" '不支持 POST'
+
 echo "== T5 保留管理 =="
 R=$(curl -s -X POST "$BASE/api/reservations" -H 'Content-Type: application/json' \
   -d '{"port":26001,"protocol":"tcp","owner":"kyson","project":"e2e","reason":"待部署","expires_at":"2030-01-01"}')
