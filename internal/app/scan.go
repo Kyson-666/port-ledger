@@ -51,6 +51,7 @@ func (a *App) Scan(opt ScanOptions) (*ScanResult, error) {
 		listeners  []scanner.Listener
 		containers []scanner.ContainerPort
 		composeLs  []scanner.ComposePort
+		rproxyLs   []scanner.ReverseProxyRule
 		activeKeys = map[string]bool{}
 		failed     int
 		enabled    int
@@ -90,6 +91,18 @@ func (a *App) Scan(opt ScanOptions) (*ScanResult, error) {
 		if len(h) > 0 && !h[0].OK {
 			failed++
 			a.Log.Warnf("Compose 声明采集失败", map[string]any{"error": h[0].Error})
+		}
+	}
+
+	// 反代探针：规则文件不可读时降级（Health 异常），不阻断扫描
+	if a.Cfg.ScanReverseProxy {
+		enabled++
+		rs := &scanner.ReverseProxyScanner{Candidates: []string{a.Cfg.ReverseProxyFile}}
+		rp, h, _ := rs.Scan()
+		rproxyLs, healths = rp, append(healths, h...)
+		if len(h) > 0 && !h[0].OK {
+			failed++
+			a.Log.Warnf("反代规则采集失败", map[string]any{"error": h[0].Error})
 		}
 	}
 
@@ -134,6 +147,7 @@ func (a *App) Scan(opt ScanOptions) (*ScanResult, error) {
 		Listeners:    listeners,
 		Containers:   containers,
 		Compose:      composeLs,
+		RProxy:       rproxyLs,
 		Active:       activeKeys,
 		Dict:         a.Dict(),
 		Reservations: reservations,

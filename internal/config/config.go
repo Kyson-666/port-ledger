@@ -27,6 +27,8 @@ type Config struct {
 	ScanHostProc     bool
 	ScanDockerSocket bool
 	ScanComposeDir   string
+	ScanReverseProxy bool   // 是否解析群晖反向代理规则
+	ReverseProxyFile string // 反代规则文件（容器内路径）
 	ScanRanges       string
 	ScanOnStart      bool
 	ScanInterval     time.Duration
@@ -95,6 +97,8 @@ func Load() (*Config, error) {
 	c.ScanHostProc = getbool("SCAN_HOST_PROC", true)
 	c.ScanDockerSocket = getbool("SCAN_DOCKER_SOCKET", true)
 	c.ScanComposeDir = getenv("SCAN_COMPOSE_DIR", "/compose")
+	c.ScanReverseProxy = getbool("SCAN_REVERSE_PROXY", true)
+	c.ReverseProxyFile = getenv("REVERSE_PROXY_FILE", "/host/syno-www/ReverseProxy.json")
 	c.ScanRanges = getenv("SCAN_RANGES", "1-65535")
 	c.ScanOnStart = getbool("SCAN_ON_START", true)
 

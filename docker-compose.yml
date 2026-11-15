@@ -2,7 +2,7 @@
 # 容器内固定监听 443，宿主端口 8899 仅为示例，可按需修改。
 services:
   port-ledger:
-    image: ghcr.io/kyson-666/port-ledger:v1.0.1
+    image: ghcr.io/kyson-666/port-ledger:v1.0.2
     container_name: port-ledger
     restart: unless-stopped
     ports:
@@ -15,6 +15,8 @@ services:
       SCAN_HOST_PROC: "true"       # 宿主监听表（只读挂载 /host/proc）
       SCAN_DOCKER_SOCKET: "true"   # Docker API（只读挂载 docker.sock）
       SCAN_COMPOSE_DIR: /compose   # compose 声明目录
+      SCAN_REVERSE_PROXY: "true"   # 群晖反向代理规则（只读挂载 /usr/syno/etc/www）
+      REVERSE_PROXY_FILE: /host/syno-www/ReverseProxy.json
       SCAN_RANGES: "1-65535"
       SCAN_ON_START: "true"        # 空库首启自动全量扫描
       SCAN_INTERVAL: "300"         # 周期扫描（秒），0=仅手动
@@ -28,4 +30,5 @@ services:
       - /proc:/host/proc:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /volume1/docker:/compose:ro
+      - /usr/syno/etc/www:/host/syno-www:ro   # 反代规则文件（ReverseProxy.json）
       - /etc/localtime:/etc/localtime:ro

@@ -24,7 +24,7 @@ export async function render(ctx) {
   wrap.textContent = '';
 
   const counts = sum.counts || {};
-  const occupied = (counts['in-use(docker)'] || 0) + (counts['in-use(host)'] || 0) + (counts['configured'] || 0) + (counts['self'] || 0);
+  const occupied = (counts['in-use(docker)'] || 0) + (counts['in-use(host)'] || 0) + (counts['configured'] || 0) + (counts['self'] || 0) + (counts['rproxy'] || 0);
   const health = sum.health.source_health || [];
   const last = sum.last || {};
   const scanning = sum.health.scanning;
@@ -45,7 +45,7 @@ export async function render(ctx) {
 
   // B 统计卡
   const metrics = h('div.pl-metrics');
-  metrics.appendChild(Metric('已占用', occupied, { sub: '容器 / 进程 / 已声明', onClick: () => ctx.navigate('/ports?state=in-use(docker),in-use(host)') }));
+  metrics.appendChild(Metric('已占用', occupied, { sub: '反代 / 容器 / 进程 / 已声明', onClick: () => ctx.navigate('/ports?state=rproxy,in-use(docker),in-use(host)') }));
   metrics.appendChild(Metric('系统端口', counts['system'] || 0, { sub: '群晖保留，不建议使用', onClick: () => ctx.navigate('/ports?state=system') }));
   metrics.appendChild(Metric('已保留', counts['reserved'] || 0, { sub: '为待部署项目预留', onClick: () => ctx.navigate('/reservations') }));
   metrics.appendChild(Metric('空闲', sum.health ? sum.free_count : '—', { sub: `范围 1024-65535`, onClick: () => ctx.navigate('/free') }));

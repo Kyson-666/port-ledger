@@ -40,7 +40,7 @@ done
 echo "== T1 健康检查 =="
 H=$(curl -s "$BASE/api/health")
 has "status=ok" "$H" '"status":"ok"'
-has "版本号呈现" "$H" '"version":"1.0.1"'
+has "版本号呈现" "$H" '"version":"1.0.2"'
 has "首启已自动扫描" "$H" '"scan_count":1'
 has "数据源健康非空" "$H" 'source_health'
 

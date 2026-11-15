@@ -14,7 +14,8 @@ export async function render(ctx) {
   const toI = Input({ type: 'number', value: st.to, min: 1, max: 65535 });
   const cntI = Input({ type: 'number', value: st.count, min: 1, max: 50 });
   const protoS = Select([{ value: 'tcp', label: 'TCP' }, { value: 'udp', label: 'UDP' }], { value: st.protocol });
-  const contS = Switch({ checked: st.contiguous });
+  // Switch 自带 label 参数：开关与文字同处一个 <label>，点击文字也能切换，间距由组件保证
+  const contS = Switch({ checked: st.contiguous, label: '要求连续端口' });
 
   const form = Card([
     h('div.pl-card-title', null, '查询条件'),
@@ -24,7 +25,7 @@ export async function render(ctx) {
       Field('需要数量', cntI),
       Field('协议', protoS),
     ),
-    h('div.pl-field', null, contS, h('span', { style: { fontSize: 'var(--pl-font-sm)', color: 'var(--pl-n-600)' } }, ' 要求连续端口')),
+    h('div.pl-field', null, contS),
     h('div', { style: { display: 'flex', gap: '8px' } },
       Button('查询', { variant: 'primary', onClick: () => doQuery(ctx) }),
       Button('重新扫描', { variant: 'text', onClick: async () => { await ctx.scan(); toast('扫描完成'); ctx.rerender(); } }),

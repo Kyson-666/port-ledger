@@ -5,6 +5,7 @@ import { Badge } from './primitives.js';
 const STATE_MAP = {
   'self': { variant: 'self', icon: '★', text: '本工具' },
   'system': { variant: 'system', icon: '◆', text: '系统' },
+  'rproxy': { variant: 'rproxy', icon: '⇄', text: '反代' },
   'in-use(docker)': { variant: 'docker', icon: '▣', text: '容器' },
   'in-use(host)': { variant: 'host', icon: '⚙', text: '进程' },
   'configured': { variant: 'configured', icon: '◇', text: '已声明' },
@@ -14,6 +15,7 @@ const STATE_MAP = {
 
 export const STATE_COLOR = {
   'system': 'var(--pl-n-100)',
+  'rproxy': 'var(--pl-brand-200)',
   'in-use(docker)': 'var(--pl-n-300)',
   'in-use(host)': 'var(--pl-n-400)',
   'configured': 'var(--pl-n-200)',

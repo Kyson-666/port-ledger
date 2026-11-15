@@ -104,3 +104,8 @@ CREATE TABLE IF NOT EXISTS dict_override (
   PRIMARY KEY (port, protocol)
 );
 `
+
+// migrations 是对旧库的增量迁移，逐条执行并容忍「列已存在」错误。
+// v1.0.1 → v1.0.2 无新增列（rproxy 复用 process_name/cmdline），此切片当前为空，
+// 保留骨架供后续版本使用。
+var migrations = []string{}

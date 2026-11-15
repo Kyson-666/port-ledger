@@ -33,12 +33,14 @@ func TestRunPriority(t *testing.T) {
 			{Port: 9000, Protocol: "tcp", BindAddr: "0.0.0.0", PID: 42, ProcessName: "portainer"},
 			{Port: 8081, Protocol: "tcp", BindAddr: "0.0.0.0", PID: 43, ProcessName: "docker-proxy"},
 			{Port: 5000, Protocol: "tcp", BindAddr: "0.0.0.0", PID: 44, ProcessName: "dsm"},
+			{Port: 8443, Protocol: "tcp", BindAddr: "0.0.0.0", PID: 100, ProcessName: "nginx"},
 		},
 		Containers: []scanner.ContainerPort{
 			{Port: 8081, Protocol: "tcp", ContainerName: "web", Image: "nginx:alpine"},
 			{Port: 5000, Protocol: "tcp", ContainerName: "conflict-app", Image: "evil:1"},
 		},
 		Compose:      []scanner.ComposePort{{Port: 7000, Protocol: "tcp", File: "/compose/a.yml", Service: "web"}},
+		RProxy:       []scanner.ReverseProxyRule{{Port: 8443, Protocol: "tcp", HTTPS: true, Host: "nas.example.com", BackendPort: 5001, Description: "测试服务"}},
 		Reservations: map[string]store.Reservation{"21000/tcp": {ID: 1, Port: 21000, Protocol: "tcp", Owner: "kyson"}},
 		Ranges:       []config.Range{{Lo: 1, Hi: 65535}},
 		SelfKeys:     map[string]bool{"8899/tcp": true},
@@ -51,7 +53,8 @@ func TestRunPriority(t *testing.T) {
 		source string
 	}{
 		{8899, "tcp", StateSelf, SrcSelf},
-		{5000, "tcp", StateSystem, SrcDict}, // system 优先于 docker
+		{8443, "tcp", StateRProxy, SrcRProxy}, // 反代优先于进程
+		{5000, "tcp", StateSystem, SrcDict},   // system 优先于 docker
 		{6690, "tcp", StateSystem, SrcDict},
 		{123, "udp", StateSystem, SrcDict},
 		{8081, "tcp", StateInUseDock, SrcDocker}, // docker 优先于 host
@@ -153,7 +156,7 @@ func TestRunSorted(t *testing.T) {
 }
 
 func TestPriorityMapping(t *testing.T) {
-	order := []string{StateSelf, StateSystem, StateInUseDock, StateInUseHost, StateConfigured, StateReserved, StateFree}
+	order := []string{StateSelf, StateRProxy, StateSystem, StateInUseDock, StateInUseHost, StateConfigured, StateReserved, StateFree}
 	for i := 0; i < len(order)-1; i++ {
 		if Priority(order[i]) >= Priority(order[i+1]) {
 			t.Errorf("优先级顺序错误: %s(%d) 应高于 %s(%d)", order[i], Priority(order[i]), order[i+1], Priority(order[i+1]))

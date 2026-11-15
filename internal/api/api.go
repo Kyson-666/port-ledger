@@ -229,9 +229,9 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res)
 }
 
-// validStates 是端口列表 state 过滤的合法值（与 reconcile 七态一致）。
+// validStates 是端口列表 state 过滤的合法值（与 reconcile 八态一致）。
 var validStates = map[string]bool{
-	"self": true, "system": true, "in-use(docker)": true, "in-use(host)": true,
+	"self": true, "system": true, "rproxy": true, "in-use(docker)": true, "in-use(host)": true,
 	"configured": true, "reserved": true, "free": true,
 }
 
@@ -244,7 +244,7 @@ func (s *Server) handlePortsList(w http.ResponseWriter, r *http.Request) {
 	states := splitCSV(q.Get("state"))
 	for _, st := range states {
 		if !validStates[st] {
-			writeErr(w, http.StatusBadRequest, fmt.Sprintf("未知状态 %q；可选：self/system/in-use(docker)/in-use(host)/configured/reserved/free", st))
+			writeErr(w, http.StatusBadRequest, fmt.Sprintf("未知状态 %q；可选：self/rproxy/system/in-use(docker)/in-use(host)/configured/reserved/free", st))
 			return
 		}
 	}

@@ -48,6 +48,12 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("建表失败: %w", err)
 	}
+	for _, m := range migrations {
+		if _, err := db.Exec(m); err != nil {
+			// 增量列已存在等情形不视为失败
+			continue
+		}
+	}
 	return &Store{db: db}, nil
 }
 

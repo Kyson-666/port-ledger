@@ -35,6 +35,7 @@ export async function render(ctx) {
   const hostProcS = Switch({ checked: !!v.scan_host_proc });
   const dockerSockS = Switch({ checked: !!v.scan_docker_socket });
   const composeDirI = Input({ value: v.scan_compose_dir ?? '', placeholder: '/compose' });
+  const rproxyS = Switch({ checked: v.scan_reverse_proxy !== false, label: '群晖反向代理' });
   const tlsS = Switch({ checked: !!v.tls_self_signed });
 
   const changed = new Set();
@@ -43,6 +44,7 @@ export async function render(ctx) {
   track(onStartS.querySelector('input'), 'scan_on_start');
   track(hostProcS.querySelector('input'), 'scan_host_proc');
   track(dockerSockS.querySelector('input'), 'scan_docker_socket');
+  track(rproxyS.querySelector('input'), 'scan_reverse_proxy');
   track(tlsS.querySelector('input'), 'tls_self_signed');
 
   // 扫描设置
@@ -60,6 +62,8 @@ export async function render(ctx) {
     h('div.pl-card-title', null, '数据源'),
     h('div.pl-field', null, hostProcS, h('span', { style: { fontSize: 'var(--pl-font-sm)', color: 'var(--pl-n-600)' } }, ' 宿主监听表（只读挂载 /host/proc）')),
     h('div.pl-field', null, dockerSockS, h('span', { style: { fontSize: 'var(--pl-font-sm)', color: 'var(--pl-n-600)' } }, ' Docker API（只读挂载 docker.sock）')),
+    h('div.pl-field', null, rproxyS,
+      h('div.pl-field-hint', null, '解析群晖反向代理规则，把映射到外网的端口标为「反代」。需只读挂载 /usr/syno/etc/www')),
     Field('Compose 目录', composeDirI, { hint: '只读挂载，如 /compose' }),
   ]));
 

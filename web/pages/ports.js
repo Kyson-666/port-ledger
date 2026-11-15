@@ -104,6 +104,7 @@ export async function render(ctx) {
     { value: '', label: '来源：全部' },
     { value: 'dict', label: '系统字典' }, { value: 'docker', label: 'Docker 容器' },
     { value: 'proc', label: '宿主进程' }, { value: 'compose', label: 'Compose' },
+    { value: 'rproxy', label: '反向代理' },
     { value: 'reserve', label: '保留' }, { value: 'self', label: '本工具' },
   ], { value: state.source, onChange: async (e) => { state.source = e.target.value; state.page = 1; await load(ctx); ctx.rerender(); }, ariaLabel: '来源筛选' });
   srcSel.style.width = '130px';

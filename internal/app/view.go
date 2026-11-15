@@ -74,6 +74,7 @@ type ListResult struct {
 var stateLabels = map[string]string{
 	reconcile.StateSelf:       "本工具",
 	reconcile.StateSystem:     "系统",
+	reconcile.StateRProxy:     "反代",
 	reconcile.StateInUseDock:  "容器",
 	reconcile.StateInUseHost:  "进程",
 	reconcile.StateConfigured: "已声明",

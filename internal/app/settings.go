@@ -21,6 +21,7 @@ var SettingKeys = map[string]bool{
 	"scan_host_proc":     true,
 	"scan_docker_socket": true,
 	"scan_compose_dir":   true,
+	"scan_reverse_proxy": true,
 	"admin_port":         true,
 	"tls_self_signed":    true,
 }
@@ -35,6 +36,7 @@ func (a *App) SettingDefaults() map[string]any {
 		"scan_host_proc":     a.envCfg.ScanHostProc,
 		"scan_docker_socket": a.envCfg.ScanDockerSocket,
 		"scan_compose_dir":   a.envCfg.ScanComposeDir,
+		"scan_reverse_proxy": a.envCfg.ScanReverseProxy,
 		"admin_port":         a.envCfg.AdminPort,
 		"tls_self_signed":    a.envCfg.TLSSelfSigned,
 	}
@@ -62,7 +64,7 @@ func (a *App) EffectiveSettings() (map[string]any, error) {
 				out[k] = n
 				continue
 			}
-		case "scan_on_start", "scan_host_proc", "scan_docker_socket", "tls_self_signed":
+		case "scan_on_start", "scan_host_proc", "scan_docker_socket", "scan_reverse_proxy", "tls_self_signed":
 			out[k] = v == "true" || v == "1"
 			continue
 		}
@@ -104,6 +106,9 @@ func (a *App) ApplySettings() error {
 	if v, ok := db["scan_compose_dir"]; ok && v != "" {
 		a.Cfg.ScanComposeDir = v
 	}
+	if v, ok := db["scan_reverse_proxy"]; ok {
+		a.Cfg.ScanReverseProxy = v == "true" || v == "1"
+	}
 	return nil
 }
 
@@ -117,6 +122,7 @@ func (a *App) ResetSettingsToEnv() {
 	a.Cfg.ScanHostProc = a.envCfg.ScanHostProc
 	a.Cfg.ScanDockerSocket = a.envCfg.ScanDockerSocket
 	a.Cfg.ScanComposeDir = a.envCfg.ScanComposeDir
+	a.Cfg.ScanReverseProxy = a.envCfg.ScanReverseProxy
 }
 
 // ValidateLedgerSettingsValues 校验备份文件携带的设置值（键白名单由 API 层过滤）。
@@ -194,6 +200,17 @@ func ValidateSettings(m map[string]any) error {
 	if v, ok := m["scan_compose_dir"]; ok {
 		if s, _ := v.(string); len(s) > 512 {
 			return fmt.Errorf("scan_compose_dir 过长")
+		}
+	}
+	if v, ok := m["scan_reverse_proxy"]; ok {
+		switch t := v.(type) {
+		case bool:
+		case string:
+			if t != "true" && t != "false" && t != "1" && t != "0" {
+				return fmt.Errorf("scan_reverse_proxy 需为布尔值")
+			}
+		default:
+			return fmt.Errorf("scan_reverse_proxy 需为布尔值")
 		}
 	}
 	return nil

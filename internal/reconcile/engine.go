@@ -18,6 +18,7 @@ import (
 const (
 	StateSelf       = "self"
 	StateSystem     = "system"
+	StateRProxy     = "rproxy"
 	StateInUseDock  = "in-use(docker)"
 	StateInUseHost  = "in-use(host)"
 	StateConfigured = "configured"
@@ -34,23 +35,28 @@ const (
 	SrcCompose = "compose"
 	SrcReserve = "reserve"
 	SrcActive  = "active"
+	SrcRProxy  = "rproxy"
 )
 
 // Priority 返回状态的归并优先级，数字越小优先级越高。
+// rproxy（反代对外端口）仅次于 self：nginx 监听同一端口时，
+// 台账应显示「反代」这一更有业务含义的状态，而不是笼统的「进程」。
 func Priority(state string) int {
 	switch state {
 	case StateSelf:
 		return 1
-	case StateSystem:
+	case StateRProxy:
 		return 2
-	case StateInUseDock:
+	case StateSystem:
 		return 3
-	case StateInUseHost:
+	case StateInUseDock:
 		return 4
-	case StateConfigured:
+	case StateInUseHost:
 		return 5
-	case StateReserved:
+	case StateConfigured:
 		return 6
+	case StateReserved:
+		return 7
 	default:
 		return 9 // free
 	}
@@ -61,6 +67,7 @@ type Input struct {
 	Listeners    []scanner.Listener
 	Containers   []scanner.ContainerPort
 	Compose      []scanner.ComposePort
+	RProxy       []scanner.ReverseProxyRule
 	Active       map[string]bool
 	Dict         *dict.Dict
 	Reservations map[string]store.Reservation
@@ -69,6 +76,27 @@ type Input struct {
 }
 
 func key(port int, proto string) string { return fmt.Sprintf("%d/%s", port, proto) }
+
+// dictHit 判断端口是否命中系统字典（用于 rproxy 的冲突叠加判定）。
+func dictHit(d *dict.Dict, port int, proto string, ranges []config.Range) bool {
+	if d == nil {
+		return false
+	}
+	if !inRanges(ranges, port) {
+		return false
+	}
+	for _, e := range d.Entries() {
+		if port < e.Port || port > e.End() {
+			continue
+		}
+		for _, p := range protosOf(e.Protocol) {
+			if p == proto {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 func inRanges(ranges []config.Range, port int) bool {
 	if len(ranges) == 0 {
@@ -123,6 +151,27 @@ func Run(in Input) []store.Observation {
 		o.State = StateSelf
 		o.Source = SrcSelf
 		o.ProcessName = "port-ledger"
+	}
+
+	// 1.5) rproxy：群晖反向代理对外端口（nginx 监听，优先于 system/docker/host 展示）
+	for _, rp := range in.RProxy {
+		o := put(rp.Port, rp.Protocol, StateRProxy, SrcRProxy)
+		// 反代端口同时被系统字典命中 → 冲突叠加（与容器占用同一处理）
+		if dictHit(in.Dict, rp.Port, rp.Protocol, in.Ranges) {
+			o.Conflict = true
+		}
+		desc := rp.Description
+		if rp.Host != "" && desc == "" {
+			desc = rp.Host
+		} else if rp.Host != "" && desc != "" && desc != rp.Host {
+			desc = rp.Host + " · " + desc
+		}
+		if desc != "" && o.ProcessName == "" {
+			o.ProcessName = desc
+		}
+		if rp.BackendPort > 0 {
+			o.Cmdline = fmt.Sprintf("反代 → %s:%d", rp.BackendHost, rp.BackendPort)
+		}
 	}
 
 	// 2) system：命中群晖系统端口字典

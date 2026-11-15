@@ -127,6 +127,7 @@ h3 { font-size: var(--pl-font-md); }
   white-space: nowrap; border: 1px solid transparent;
 }
 .pl-badge--system { background: var(--pl-n-100); color: var(--pl-n-800); border-left: 2px solid var(--pl-brand-600); }
+.pl-badge--rproxy { background: var(--pl-brand-50); color: var(--pl-brand-800); border: 1px dashed var(--pl-brand-500); }
 .pl-badge--docker { background: var(--pl-n-100); color: var(--pl-n-800); }
 .pl-badge--host { background: var(--pl-n-100); color: var(--pl-n-800); }
 .pl-badge--configured { background: var(--pl-n-0); color: var(--pl-n-600); border: 1px dashed var(--pl-n-300); }
