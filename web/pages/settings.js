@@ -31,12 +31,12 @@ export async function render(ctx) {
 
   const rangesI = Input({ value: v.scan_ranges ?? '', placeholder: '如 1-65535 或 1-1024,8000-8100' });
   const intervalI = Input({ type: 'number', value: v.scan_interval ?? 300, min: 0, max: 86400 });
-  const onStartS = Switch({ checked: !!v.scan_on_start });
-  const hostProcS = Switch({ checked: !!v.scan_host_proc });
-  const dockerSockS = Switch({ checked: !!v.scan_docker_socket });
+  const onStartS = Switch({ checked: !!v.scan_on_start, label: '首次启动自动全量扫描' });
+  const hostProcS = Switch({ checked: !!v.scan_host_proc, label: '宿主监听表（只读挂载 /host/proc）' });
+  const dockerSockS = Switch({ checked: !!v.scan_docker_socket, label: 'Docker API（只读挂载 docker.sock）' });
   const composeDirI = Input({ value: v.scan_compose_dir ?? '', placeholder: '/compose' });
   const rproxyS = Switch({ checked: v.scan_reverse_proxy !== false, label: '群晖反向代理' });
-  const tlsS = Switch({ checked: !!v.tls_self_signed });
+  const tlsS = Switch({ checked: !!v.tls_self_signed, label: '启用自签证书（HTTPS）' });
 
   const changed = new Set();
   const track = (el, key) => el.addEventListener('change', () => changed.add(key));
@@ -54,14 +54,14 @@ export async function render(ctx) {
       Field('扫描范围', rangesI, { hint: '逗号分隔，支持区间；影响字典与空闲端口判定' }),
       Field('扫描周期（秒）', intervalI, { hint: '0 表示仅手动扫描' }),
     ),
-    h('div.pl-field', null, onStartS, h('span', { style: { fontSize: 'var(--pl-font-sm)', color: 'var(--pl-n-600)' } }, ' 首次启动自动全量扫描')),
+    h('div.pl-field', null, onStartS),
   ]));
 
   // 数据源
   wrap.appendChild(Card([
     h('div.pl-card-title', null, '数据源'),
-    h('div.pl-field', null, hostProcS, h('span', { style: { fontSize: 'var(--pl-font-sm)', color: 'var(--pl-n-600)' } }, ' 宿主监听表（只读挂载 /host/proc）')),
-    h('div.pl-field', null, dockerSockS, h('span', { style: { fontSize: 'var(--pl-font-sm)', color: 'var(--pl-n-600)' } }, ' Docker API（只读挂载 docker.sock）')),
+    h('div.pl-field', null, hostProcS),
+    h('div.pl-field', null, dockerSockS),
     h('div.pl-field', null, rproxyS,
       h('div.pl-field-hint', null, '解析群晖反向代理规则，把映射到外网的端口标为「反代」。需只读挂载 /usr/syno/etc/www')),
     Field('Compose 目录', composeDirI, { hint: '只读挂载，如 /compose' }),
@@ -72,7 +72,6 @@ export async function render(ctx) {
     h('div.pl-card-title', null, '服务'),
     Field('容器内监听端口', Input({ value: env.admin_port ?? '', disabled: true }), { hint: '由环境变量 ADMIN_PORT 注入，修改请调整 compose' }),
     h('div.pl-field', null, tlsS,
-      h('span', { style: { fontSize: 'var(--pl-font-sm)', color: 'var(--pl-n-600)' } }, ' 启用自签证书（HTTPS）'),
       h('div.pl-field-hint', null, '该开关由环境变量决定：此处保存的是期望值，需在 compose 中设置 TLS_SELF_SIGNED 并重启容器后生效。默认明文 HTTP，建议由群晖反向代理终结 TLS。')),
   ]));
 

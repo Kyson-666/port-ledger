@@ -1,7 +1,7 @@
 // P4 空闲端口 —— 模式 P-C（查询 + 结果 + 复制/占位）
 import { h, fmtTime } from '../lib/dom.js';
 import { api } from '../lib/api.js';
-import { Button, Card, Field, Input, Select, Switch, EmptyState, toast, Badge } from '../components/primitives.js';
+import { Button, Card, Field, Input, Select, Switch, EmptyState, toast } from '../components/primitives.js';
 import { PortPicker } from '../components/domain2.js';
 
 let st = { from: 20000, to: 30000, count: 5, protocol: 'tcp', contiguous: false, result: null, error: '', loading: false };
@@ -28,7 +28,6 @@ export async function render(ctx) {
     h('div.pl-field', null, contS),
     h('div', { style: { display: 'flex', gap: '8px' } },
       Button('查询', { variant: 'primary', onClick: () => doQuery(ctx) }),
-      Button('重新扫描', { variant: 'text', onClick: async () => { await ctx.scan(); toast('扫描完成'); ctx.rerender(); } }),
     ),
   ]);
   wrap.appendChild(form);

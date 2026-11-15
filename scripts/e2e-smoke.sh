@@ -2,10 +2,10 @@
 # PortLedger 端到端冒烟：以真实扫描器（proc / compose 夹具）驱动完整业务流。
 #
 # 用法：bash scripts/e2e-smoke.sh [二进制路径]
-# 默认读取 ./bin/port-ledger，临时目录自动创建并在结束时清理。
+# 默认优先 ./bin/port-ledger.exe（Windows），其次 ./bin/port-ledger（Linux/CI）。
 set -u
 
-BIN="${1:-./bin/port-ledger}"
+if [ -n "${1:-}" ]; then BIN="$1"; elif [ -f ./bin/port-ledger.exe ]; then BIN=./bin/port-ledger.exe; else BIN=./bin/port-ledger; fi
 PORT="${ADMIN_PORT_E2E:-18081}"
 BASE="http://127.0.0.1:${PORT}"
 WORK="$(mktemp -d)"
@@ -40,7 +40,7 @@ done
 echo "== T1 健康检查 =="
 H=$(curl -s "$BASE/api/health")
 has "status=ok" "$H" '"status":"ok"'
-has "版本号呈现" "$H" '"version":"1.0.2"'
+has "版本号呈现" "$H" '"version":"1.0.3"'
 has "首启已自动扫描" "$H" '"scan_count":1'
 has "数据源健康非空" "$H" 'source_health'
 

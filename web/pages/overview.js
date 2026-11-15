@@ -29,13 +29,12 @@ export async function render(ctx) {
   const last = sum.last || {};
   const scanning = sum.health.scanning;
 
-  // A 页头
+  // A 页头（重新扫描统一在顶栏；此处保留数据源健康徽标）
   wrap.appendChild(h('div.pl-page-head', null,
     h('h1', null, '端口总览',
       h('span.pl-count-label', null, last.finished_at ? `上次扫描 ${fmtClock(last.finished_at)}` : '尚未完成扫描')),
     h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
       HealthIndicator(health),
-      Button(scanning ? '扫描中…' : '重新扫描', { variant: 'primary', busy: scanning, disabled: scanning, onClick: async () => { await ctx.scan(); } }),
     )));
 
   if (scanning) wrap.appendChild(h('div.pl-inline-warning', null, '正在进行首次全量扫描，数据将在完成后自动刷新…'));

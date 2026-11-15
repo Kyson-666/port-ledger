@@ -64,13 +64,12 @@ export async function render(ctx) {
 
   const wrap = h('div');
 
-  // A 页头
+  // A 页头（重新扫描统一在顶栏，避免与全局入口重复）
   wrap.appendChild(h('div.pl-page-head', null,
     h('h1', null, '端口列表', h('span.pl-count-label', null, `共 ${state.total} 条`)),
     h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
       state.last ? h('span', { style: { fontSize: 'var(--pl-font-xs)', color: 'var(--pl-n-400)' } }, `上次扫描 ${fmtClock(state.last.finished_at)}`) : null,
       Button('导出 CSV', { variant: 'default', onClick: () => exportCSV() }),
-      Button('重新扫描', { onClick: async () => { await ctx.scan(); await load(ctx); ctx.rerender(); } }),
     )));
 
   // B 筛选栏
@@ -166,9 +165,9 @@ export async function render(ctx) {
     onRowClick: (r) => openNameDrawer(ctx, r),
     empty: EmptyState({
       title: state.total === 0 && !state.q && !state.states.length ? '尚未扫描' : '没有符合条件的端口',
-      desc: state.total === 0 && !state.q && !state.states.length ? '执行一次扫描以建立端口台账' : '试试重置筛选条件',
+      desc: state.total === 0 && !state.q && !state.states.length ? '点击右上角「重新扫描」建立端口台账' : '试试重置筛选条件',
       action: state.total === 0 && !state.q && !state.states.length
-        ? Button('重新扫描', { variant: 'primary', onClick: async () => { await ctx.scan(); await load(ctx); ctx.rerender(); } })
+        ? null
         : Button('重置筛选', { variant: 'text', onClick: async () => { state.q = ''; state.states = []; state.protocol = ''; state.source = ''; state.project = ''; state.page = 1; await load(ctx); ctx.rerender(); } }),
     }),
   }));

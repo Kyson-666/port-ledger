@@ -55,7 +55,6 @@ h3 { font-size: var(--pl-font-md); }
   padding: 0 var(--pl-space-4); background: var(--pl-n-0); border-bottom: var(--pl-border);
   position: sticky; top: 0; z-index: 20;
 }
-.pl-topbar .pl-search { flex: 1; max-width: 360px; }
 .pl-topbar-spacer { flex: 1; }
 .pl-content { padding: var(--pl-space-5); flex: 1; min-width: 0; }
 
@@ -100,8 +99,10 @@ h3 { font-size: var(--pl-font-md); }
 .pl-field-hint { font-size: var(--pl-font-xs); color: var(--pl-n-400); margin-top: 4px; }
 .pl-field-error { font-size: var(--pl-font-xs); color: var(--pl-danger-600); margin-top: 4px; }
 .pl-count { font-size: var(--pl-font-xs); color: var(--pl-n-400); text-align: right; margin-top: 4px; }
-.pl-switch { display: inline-flex; align-items: center; gap: var(--pl-space-2); cursor: pointer; font-size: var(--pl-font-sm); }
+/* display:inline-flex 必须压过 .pl-field > label 的 display:block（否则开关布局塌缩、滑块叠在文字上） */
+.pl-switch, .pl-field > label.pl-switch { display: inline-flex; align-items: center; gap: var(--pl-space-2); cursor: pointer; font-size: var(--pl-font-sm); position: relative; margin-bottom: 0; }
 .pl-switch input { position: absolute; opacity: 0; }
+.pl-switch > span:not(.pl-switch-track) { font-size: var(--pl-font-sm); color: var(--pl-n-800); user-select: none; }
 .pl-switch-track { width: 34px; height: 20px; border-radius: 10px; background: var(--pl-n-300); position: relative; transition: background var(--pl-motion-fast) var(--pl-ease); flex: none; }
 .pl-switch-track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--pl-n-0); transition: transform var(--pl-motion-fast) var(--pl-ease); }
 .pl-switch input:checked + .pl-switch-track { background: var(--pl-brand-600); }
@@ -260,5 +261,4 @@ table.pl-table { width: 100%; border-collapse: collapse; background: var(--pl-n-
   .pl-cardlist .pl-card { margin-bottom: var(--pl-space-3); }
   .pl-drawer { width: 100%; }
   .pl-topbar { flex-wrap: wrap; height: auto; padding: var(--pl-space-2) var(--pl-space-3); }
-  .pl-topbar .pl-search { max-width: none; flex-basis: 100%; }
 }

@@ -1,7 +1,7 @@
 // PortLedger 管理台入口：外壳、路由、全局反馈
 import { h, mount, clear, fmtClock } from './lib/dom.js';
 import { api } from './lib/api.js';
-import { initHosts, Button, Input, toast } from './components/primitives.js';
+import { initHosts, Button, toast } from './components/primitives.js';
 import { HealthIndicator } from './components/domain.js';
 
 const ROUTES = [
@@ -38,23 +38,15 @@ function shell() {
     }
     navWrap.appendChild(box);
   }
-  navWrap.appendChild(h('div.pl-nav-foot', null, 'v1.0.2 · 无认证（内网）'));
-
-  const search = Input({ placeholder: '搜索端口 / 名称 / 容器 / 项目', ariaLabel: '全局搜索' });
-  search.className = 'pl-input pl-search';
-  search.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { const v = search.value.trim(); navigate('/ports' + (v ? '?q=' + encodeURIComponent(v) : '')); }
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') { e.preventDefault(); search.focus(); }
-  });
+  navWrap.appendChild(h('div.pl-nav-foot', null, 'v1.0.3 · 无认证（内网）'));
 
   healthHost = h('span');
   lastScanHost = h('span', { style: { fontSize: 'var(--pl-font-xs)', color: 'var(--pl-n-400)', whiteSpace: 'nowrap' } });
   scanBtn = Button('重新扫描', { variant: 'primary', onClick: doScan });
 
+  // 搜索框只在端口列表页内提供（页内实时过滤）；topbar 仅保留 全局重新扫描 / 健康 / 上次扫描，避免与页内控件重复
   const topbar = h('header.pl-topbar', null,
-    search, h('div.pl-topbar-spacer'), lastScanHost, healthHost, scanBtn);
+    h('div.pl-topbar-spacer'), lastScanHost, healthHost, scanBtn);
 
   pageHost = h('main.pl-content');
   const main = h('div.pl-main', null, topbar, pageHost);
